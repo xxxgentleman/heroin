@@ -751,6 +751,6 @@ Heroin = function (path) {
     Compiler(Preprocessor(data));
 };
 
-Heroin('./test.hrn');
+//Heroin('./test.hrn');
 
 module.exports = Heroin;
