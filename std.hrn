@@ -1,0 +1,1 @@
+﻿macro[+=; [symbol; value]; =[symbol; +[symbol; value]]]
