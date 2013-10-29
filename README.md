@@ -67,7 +67,11 @@ It's just a LISP-like implentation based on node.js.
 	{(+ 1 2)}	===		3
 
 ### How to use heroin
-### step 1. write what you want to try in a file like try.hrn
-### step 2. create a .js file to require heroin.js
-### step 3. just node it and see what happen
-### I think this module must have a lot of bugs to kill, a lot of exceptation to deal.
+> step 1. write what you want to try in a file like try.hrn
+> step 2. create a .js file to require heroin.js
+> step 3. just node it and see what happen
+> I think this module must have a lot of bugs to kill, a lot of exceptation to deal.
+
+### License
+
+[MIT](http://opensource.org/licenses/MIT)
