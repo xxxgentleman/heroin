@@ -38,32 +38,6 @@
         };
     };
 
-    Tokens = {};
-    Tokens.ENDOFSTREAM = 0;
-    Tokens.SEMICOLON_TOKEN = Tokens.ENDOFSTREAM + 1;
-    Tokens.ARROW_TOKEN = Tokens.SEMICOLON_TOKEN + 1;
-    Tokens.LEFTPAREN_TOKEN = Tokens.ARROW_TOKEN + 1;
-    Tokens.RIGHTPAREN_TOKEN = Tokens.LEFTPAREN_TOKEN + 1;
-    Tokens.LEFTBRACKET_TOKEN = Tokens.RIGHTPAREN_TOKEN + 1;
-    Tokens.RIGHTBRACKET_TOKEN = Tokens.LEFTBRACKET_TOKEN + 1;
-    Tokens.LEFTBRACE_TOKEN = Tokens.RIGHTBRACKET_TOKEN + 1;
-    Tokens.RIGHTBRACE_TOKEN = Tokens.LEFTBRACE_TOKEN + 1;
-    Tokens.BOOLEAN_TOKEN = Tokens.RIGHTBRACE_TOKEN + 1;
-    Tokens.NUMBER_TOKEN = Tokens.BOOLEAN_TOKEN + 1;
-    Tokens.STRING_TOKEN = Tokens.NUMBER_TOKEN + 1;
-    Tokens.IDENTIFIER_TOKEN = Tokens.STRING_TOKEN + 1;
-    Tokens.COMMENT_TOKEN = Tokens.IDENTIFIER_TOKEN + 1;
-    Tokens.index = {
-        '-1': 'ENDOFSTREAM',
-        ';': 'SEMICOLON_TOKEN',
-        '(': 'LEFTPAREN_TOKEN',
-        ')': 'RIGHTPAREN_TOKEN',
-        '[': 'LEFTBRACKET_TOKEN',
-        ']': 'RIGHTBRACKET_TOKEN',
-        '{': 'LEFTBRACE_TOKEN',
-        '}': 'RIGHTBRACE_TOKEN',
-    };
-
     States = {};
     States.START_STATE = 0;
     States.STRING_STATE = States.START_STATE + 1;
@@ -75,14 +49,7 @@
         var reader = reader,
             currentLine = 1,
             state = States.START_STATE,
-            numDots = 0, makeToken;
-
-        makeToken = function (type, text) {
-            return {
-                type: type,
-                text: text
-            };
-        };
+            numDots = 0;
 
         return {
             nextToken: function () {
@@ -95,7 +62,7 @@
 
                             switch (character) {
                                 case '-1': case ';': case '(': case ')': case '[': case ']': case '{': case '}':
-                                    return makeToken(Tokens[Tokens.index[character]]);
+                                    return { type: 'separator', text: character };
                                 case '\r': case '\n':
                                     currentLine += 1;
                                     break;
@@ -141,7 +108,7 @@
                             bufferString += character;
                             state = States.START_STATE;
 
-                            return makeToken(Tokens.STRING_TOKEN, bufferString);
+                            return { type: 'value', text: bufferString };
                         case States.COMMENT_STATE:
                             var character = reader.nextCharacter();
 
@@ -152,7 +119,7 @@
 
                             state = States.START_STATE;
 
-                            return makeToken(Tokens.COMMENT_TOKEN, bufferString);
+                            return { type: 'comment', text: bufferString };
                         case States.NUMBER_STATE:
                             var character = reader.nextCharacter();
 
@@ -172,7 +139,7 @@
                             reader.retract();
                             state = States.START_STATE;
 
-                            return makeToken(Tokens.NUMBER_TOKEN, bufferString);
+                            return { type: 'value', text: bufferString };
                         case States.IDENTIFIER_STATE:
                             var character = reader.nextCharacter();
 
@@ -185,11 +152,11 @@
                             state = States.START_STATE;
 
                             if (bufferString === 'true' || bufferString === 'false') {
-                                return makeToken(Tokens.BOOLEAN_TOKEN, bufferString);
+                                return { type: 'value', text: bufferString };
                             } else if (bufferString === '->') {
-                                return makeToken(Tokens.ARROW_TOKEN, bufferString);
+                                return { type: 'separator', text: bufferString };
                             } else if (!/\.\.|\.$/.test(bufferString)) {
-                                return makeToken(Tokens.IDENTIFIER_TOKEN, bufferString);
+                                return { type: 'identifier', text: bufferString };
                             };
 
                             break;
@@ -204,53 +171,49 @@
         var scanner = scanner,
             currentToken = {},
             aheadToken = {},
+            consumed = true,
             nextToken, lookAhead, parseSourceCode;
 
-        aheadToken.consumed = true;
-
         nextToken = function () {
-            if (aheadToken.consumed) {
+            if (consumed) {
                 var token = scanner.nextToken();
 
-                while (token === Tokens.COMMENT_TOKEN) {
+                while (token.type === 'comment') {
                     token = scanner.nextToken();
                 };
 
-                currentToken.type = token.type;
-                currentToken.text = token.text;
+                currentToken = token;
             } else {
-                currentToken.type = aheadToken.type;
-                currentToken.text = aheadToken.text;
-                aheadToken.consumed = true;
+                currentToken= aheadToken;
+                consumed = true;
             };
 
-            return currentToken.type;
+            return currentToken;
         };
 
         lookAhead = function () {
-            if (aheadToken.consumed) {
+            if (consumed) {
                 var token = scanner.nextToken();
 
-                while (token === Tokens.COMMENT_TOKEN) {
+                while (token.type === 'comment') {
                     token = scanner.nextToken();
                 };
 
-                aheadToken.type = token.type;
-                aheadToken.text = token.text;
-                aheadToken.consumed = false;
+                aheadToken= token;
+                consumed = false;
             };
 
-            return aheadToken.type;
+            return aheadToken;
         };
 
         parseSourceCode = function () {
             while (true) {
-                switch (lookAhead()) {
-                    case Tokens.IDENTIFIER_TOKEN:
+                switch (lookAhead().type) {
+                    case 'identifier':
                         nextToken();
 
-                        switch (lookAhead()) {
-                            case Tokens.LEFTBRACKET_TOKEN:
+                        switch (lookAhead().text) {
+                            case '[':
                                 var id = currentToken.text;
 
                                 nextToken();
@@ -262,7 +225,7 @@
                                 };
 
                                 continue;
-                            case Tokens.SEMICOLON_TOKEN: case Tokens.RIGHTBRACKET_TOKEN: case Tokens.RIGHTPAREN_TOKEN: case Tokens.RIGHTBRACE_TOKEN: case Tokens.IDENTIFIER_TOKEN:
+                            case ';': case ']':
                                 if (arguments[0] !== undefined) {
                                     arguments[0].push(currentToken.text);
                                 } else {
@@ -274,61 +237,101 @@
                         };
 
                         continue;
-                    case Tokens.LEFTBRACKET_TOKEN:
-                        nextToken();
+                    case 'separator':
+                        switch (lookAhead().text) {
+                            case '(':
+                                var list = ['quote'];
 
-                        if (arguments[0] !== undefined) {
-                            arguments[0].push(parseSourceCode([]));
-                        } else {
-                            return parseSourceCode([]);
+                                nextToken();
+
+                                while (true) {
+                                    switch (lookAhead().type) {
+                                        case 'value':
+                                            nextToken();
+                                            list.push(currentToken.text);
+                                            continue;
+                                        case 'identifier':
+                                            if (lookAhead().text === '_') {
+                                                nextToken();
+                                                list.push([]);
+                                            } else {
+                                                nextToken();
+
+                                                if (lookAhead().type === 'value' || lookAhead().type === 'identifier') {
+                                                    list.push(currentToken.text);
+                                                } else if (lookAhead().type === 'separator') {
+                                                    var id = currentToken.text;
+
+                                                    nextToken();
+                                                    list.push(parseSourceCode([id]));
+                                                };
+                                            };
+
+                                            continue;
+                                        case 'separator':
+                                            nextToken();
+                                            break;
+                                        default:
+                                    };
+                                };
+
+                                if (arguments[0] !== undefined) {
+                                    arguments[0].push(list);
+                                } else {
+                                    return list;
+                                };
+
+                                continue;
+                            case '[':
+                                nextToken();
+
+                                if (arguments[0] !== undefined) {
+                                    arguments[0].push(parseSourceCode([]));
+                                } else {
+                                    return parseSourceCode([]);
+                                };
+
+                                continue;
+                            case ';':
+                                nextToken();
+
+                                if (lookAhead().text === ']') {
+                                    arguments[0].push([]);
+                                };
+
+                                continue;
+                            case '{':
+                                nextToken();
+
+                                if (arguments[0] !== undefined) {
+                                    arguments[0].push(parseSourceCode(['unquote']));
+                                } else {
+                                    return parseSourceCode(['unquote']);
+                                };
+
+                                continue;
+                            case '->':
+                                nextToken();
+
+                                if (arguments[0][0] !== '?') {
+                                    arguments[0].unshift('?');
+                                };
+
+                                arguments[0][arguments[0].length - 1] = [arguments[0][arguments[0].length - 1]];
+
+                                if (lookAhead().text === '[') {
+                                    arguments[0][arguments[0].length - 1].push(parseSourceCode([]));
+                                } else {
+                                    arguments[0][arguments[0].length - 1].push(parseSourceCode());
+                                };
+
+                                continue;
+                            case ']': case '}':
+                                nextToken();
+                                return arguments[0];
+                            default:
                         };
-
-                        continue;
-                    case Tokens.SEMICOLON_TOKEN:
-                        nextToken();
-
-                        if (lookAhead() === Tokens.RIGHTBRACKET_TOKEN) {
-                            arguments[0].push([]);
-                        };
-
-                        continue;
-                    case Tokens.LEFTPAREN_TOKEN:
-                        nextToken();
-
-                        if (arguments[0] !== undefined) {
-                            arguments[0].push(parseSourceCode(['quote']));
-                        } else {
-                            return parseSourceCode(['quote']);
-                        };
-
-                        continue;
-                    case Tokens.LEFTBRACE_TOKEN:
-                        nextToken();
-
-                        if (arguments[0] !== undefined) {
-                            arguments[0].push(parseSourceCode(['unquote']));
-                        } else {
-                            return parseSourceCode(['unquote']);
-                        };
-
-                        continue;
-                    case Tokens.ARROW_TOKEN:
-                        nextToken();
-
-                        if (arguments[0][0] !== '?') {
-                            arguments[0].unshift('?');
-                        };
-
-                        arguments[0][arguments[0].length - 1] = [arguments[0][arguments[0].length - 1]];
-
-                        if (lookAhead() === Tokens.LEFTBRACKET_TOKEN) {
-                            arguments[0][arguments[0].length - 1].push(parseSourceCode([]));
-                        } else {
-                            arguments[0][arguments[0].length - 1].push(parseSourceCode());
-                        };
-
-                        continue;
-                    case Tokens.NUMBER_TOKEN: case Tokens.STRING_TOKEN: case Tokens.BOOLEAN_TOKEN:
+                    case 'value':
                         nextToken();
 
                         if (arguments[0] !== undefined) {
@@ -338,9 +341,6 @@
                         };
 
                         continue;
-                    case Tokens.RIGHTPAREN_TOKEN: case Tokens.RIGHTBRACKET_TOKEN: case Tokens.RIGHTBRACE_TOKEN:
-                        nextToken();
-                        return arguments[0];
                     default:
                 };
             };
@@ -352,11 +352,11 @@
             while (true) {
                 parseTree.push(parseSourceCode());
 
-                while (lookAhead() === Tokens.COMMENT_TOKEN) {
+                while (lookAhead().type === 'comment') {
                     nextToken();
                 };
 
-                if (lookAhead() === Tokens.ENDOFSTREAM) {
+                if (lookAhead().type === 'separator' && lookAhead().text === '-1') {
                     break;
                 };
             };
@@ -740,7 +740,6 @@
                 Evaluate(parseTree[j], globalEnv);
                 delete globalEnv['child'];
             };
-            console.log(globalEnv);
         }();
     };
 }());
