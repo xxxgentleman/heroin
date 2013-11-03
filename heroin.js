@@ -81,12 +81,7 @@
                                 case '-':
                                     bufferString = character;
 
-                                    if (/\d/.test(reader.nextCharacter())) {
-                                        state = States.NUMBER_STATE;
-                                    } else {
-                                        state = States.IDENTIFIER_STATE;
-                                    };
-
+                                    state = (/\d/.test(reader.nextCharacter())) ? States.NUMBER_STATE : States.IDENTIFIER_STATE;
                                     reader.retract();
                                     break;
                                 default:
@@ -225,7 +220,7 @@
                                 };
 
                                 continue;
-                            case ';': case ']':
+                            case ';': case ']': case '->':
                                 if (arguments[0] !== undefined) {
                                     arguments[0].push(currentToken.text);
                                 } else {
@@ -285,17 +280,19 @@
                             case '[':
                                 nextToken();
 
+                                var exp = (lookAhead().text === ';') ? [[]] : [];
+
                                 if (arguments[0] !== undefined) {
-                                    arguments[0].push(parseSourceCode([]));
+                                    arguments[0].push(parseSourceCode(exp));
                                 } else {
-                                    return parseSourceCode([]);
+                                    return parseSourceCode(exp);
                                 };
 
                                 continue;
                             case ';':
                                 nextToken();
 
-                                if (lookAhead().text === ']') {
+                                if (lookAhead().text === ']' || lookAhead().text === ';') {
                                     arguments[0].push([]);
                                 };
 
@@ -374,7 +371,7 @@
 }());
 
 (function () {
-    var core = ['quote', '?', 'var', '=', 'fct', 'begin', 'unquote',
+    var core = ['quote', '?', 'var', '=', 'fct', 'begin', 'unquote', 'ary', 'obj',
             'atom', '==', 'car', 'cdr', 'cons',
             '+', '-', '*', '/', '%', '<', '>', 'dlt', 'tpof', 'rtn'],
         globalEnv = {}, macroTable = {}, closureIndex = 0,
@@ -397,13 +394,20 @@
     };
 
     SymbolExchanger = function (array, symbol, target) {
-        for (var i = 0, iMax = array.length; i < iMax; i += 1) {
+        for (var i = 0, imax = array.length; i < imax; i += 1) {
             if (Array.isArray(array[i])) {
                 array[i] = SymbolExchanger(array[i], symbol, target);
             };
 
             if (array[i] === symbol) {
-                array[i] = target;
+                if (symbol==='body') {
+                    for (var j = 0, jmax = target.length; j < jmax; j += 1) {
+                        array.splice(i + j, j === 0 ? 1 : 0, target[j]);
+                        imax += j;
+                    };
+                } else {
+                    array.splice(i, 1, target);
+                };
             };
         };
 
@@ -430,35 +434,21 @@
 
     FunctionCall = {
         'atom': function (Arguments, env) {
-            if (Array.isArray(Arguments[0]) === false || Arguments === []) {
-                return true;
-            } else {
-                return false;
-            };
+            return (Array.isArray(Arguments[0]) === false || Arguments[0] === []) ? true : false;
         },
 
         '==': function (Arguments, env) {
             if (Array.isArray(Arguments[0]) || Array.isArray(Arguments[1])) {
                 return false;
-            };
-
-            if (Arguments[0] === Arguments[1]) {
-                if (Arguments[2] !== undefined) {
-                    return this['=='](Arguments.slice(1), env);
-                } else {
-                    return true;
-                };
+            } else if (Arguments[0] === Arguments[1]) {
+                return (Arguments[2] !== undefined) ? this['=='](Arguments.slice(1), env) : true;
             } else {
                 return false;
             };
         },
 
         'car': function (Arguments, env) {
-            if (Arguments.length === 1) {
-                return false;
-            } else {
-                return Arguments.slice(0, 1)[0];
-            };
+            return (Arguments.length === 1) ? false : Arguments.slice(0, 1)[0];
         },
 
         'cdr': function (Arguments, env) {
@@ -483,7 +473,17 @@
     Macro = function (macroName, Arguments) {
         macroTable[macroName] = function () {
             for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                SymbolExchanger(Arguments[1], Arguments[0][i], arguments[i]);
+                if (Arguments[0].indexOf('body') !== -1) {
+                    if (Arguments[0][i] === 'body') {
+                        var exc = Array.prototype.slice.call(arguments, i, i + arguments.length - max + 1);
+                    } else {
+                        var exc = arguments[(i < Arguments[0].indexOf('body')) ? i : i + arguments.length - max];
+                    };
+                } else {
+                    var exc = arguments[i];
+                };
+
+                SymbolExchanger(Arguments[1], Arguments[0][i], exc);
             };
 
             return Arguments[1];
@@ -538,8 +538,7 @@
         '<': function (Arguments, env) {
             if (Arguments.length > 2) {
                 if (Arguments[0] < Arguments[1]) {
-                    Arguments.shift();
-                    return this['<'](Arguments);
+                    return this['<'](Arguments.slice(1));
                 } else {
                     return false;
                 };
@@ -551,8 +550,7 @@
         '>': function (Arguments, env) {
             if (Arguments.length > 2) {
                 if (Arguments[0] > Arguments[1]) {
-                    Arguments.shift();
-                    return this['>'](Arguments);
+                    return this['>'](Arguments.slice(1));
                 } else {
                     return false;
                 };
@@ -566,19 +564,11 @@
         },
 
         'tpof': function (Arguments, env) {
-            if (Array.isArray(Arguments[0])) {
-                return 'array';
-            } else {
-                return typeof Arguments[0];
-            };
+            return (Array.isArray(Arguments[0])) ? 'array' : typeof Arguments[0];
         },
 
         'rtn': function (Arguments, env) {
-            if (Arguments !== []) {
-                return Arguments.unshift('rtn');
-            } else {
-                return 'rtn';
-            };
+            return (Arguments !== []) ? Arguments.unshift('rtn') : 'rtn';
         }
     };
 
@@ -590,11 +580,13 @@
                 return Primitive(Expression, env);
             } else {
                 if (core.indexOf(Expression[0]) !== -1 || Expression[0] === 'macro' || Expression[0] in macroTable || Expression[0] in globalEnv) {
-                    return Apply(Expression.shift(), Expression, env);
-                } else if (/\./.test(Expression[0])) {
-                    Expression[0] = Expression[0].split('.');
+                    return Apply(Expression[0], Expression.slice(1), env);
+                } else if (/\./.test(Expression[0]) || Array.isArray(Expression[0])) {
+                    if (/\./.test(Expression[0])) {
+                        Expression[0] = Expression[0].split('.');
+                    };
 
-                    return Apply(Expression.shift(), Expression, env);
+                    return Apply(Expression[0], Expression.slice(1), env);
                 };
             };
         };
@@ -639,24 +631,14 @@
 
         Special = {
             'quote': function (Arguments, env) {
-                if (Arguments.length === 1) {
-                    return Arguments[0];
-                } else {
-                    return Arguments;
-                };
+                return (Arguments.length === 1) ? Arguments[0] : Arguments;
             },
 
             '?': function (Arguments, env) {
                 if (Arguments[1] === undefined) {
-                    if (Arguments[0] === []) {
-                        return false;
-                    } else {
-                        return Evaluate(Arguments[0]);
-                    };
+                    return (Arguments[0] === []) ? false : Evaluate(Arguments[0]);
                 } else if (Evaluate(Arguments[0][0], env)) {
                     return Evaluate(Arguments[0][1], env);
-                } else if (Arguments[1] === undefined) {
-                    return false;
                 } else {
                     return this['?'](Arguments.slice(1), env);
                 };
@@ -665,21 +647,17 @@
             'var': function (Arguments, env) {
                 var key = Array.isArray(Arguments[0]) ? Evaluate(Arguments[0], env) : Arguments[0];
 
-                if (closureIndex === 0) {
-                    globalEnv[key] = Evaluate(Arguments[1], env);
-                } else {
-                    env[key] = Evaluate(Arguments[1], env);
-                };
+                env[key] = Evaluate(Arguments[1], env);
 
                 return key;
             },
 
             '=': function (Arguments, env) {
                 var key = Array.isArray(Arguments[0]) ? Evaluate(Arguments[0], env) : Arguments[0],
-                    tagetEnv = VariableSearcher(key, env);
+                    targetEnv = VariableSearcher(key, env);
 
-                if (tagetEnv !== false) {
-                    tagetEnv[key] = Evaluate(Arguments[1], env);
+                if (targetEnv !== false) {
+                    targetEnv[key] = Evaluate(Arguments[1], env);
                 };
 
                 return key;
@@ -689,7 +667,6 @@
                 var lambda = function () {
                     arguments[1]['child'] = {};
                     closureIndex += 1;
-                    console.log(arguments[0]);
                     for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
                         SymbolExchanger(Arguments[1], Arguments[0][i], arguments[0][i]);
                     };
@@ -702,11 +679,7 @@
                     return result;
                 };
 
-                if (Arguments[2]) {
-                    return lambda.apply(this, Arguments[2]);
-                } else {
-                    return lambda;
-                };
+                return (Arguments[2]) ? lambda.apply(this, Arguments[2]) : lambda;
             },
 
             'begin': function (Arguments, env) {
@@ -715,9 +688,9 @@
                         return Evaluate(Arguments[i], env);
                     } else {
                         var result = Evaluate(Arguments[i], env);
-
-                        if (result[0] === 'rtn') {
-                            return result[1];
+                        
+                        if (Arguments[i][0] === 'rtn') {
+                            return result;
                         };
                     };
                 };
@@ -725,6 +698,26 @@
 
             'unquote': function (Arguments, env) {
                 return Evaluate(Evaluate(Arguments[0], env), env);
+            },
+
+            'ary': function (Arguments, env) {
+                var array = [];
+
+                for (var i = 0, max = Arguments.length; i < max; i += 1) {
+                    array.push(Evaluate(Arguments[i]));
+                };
+
+                return array;
+            },
+
+            'obj': function (Arguments, env) {
+                var object = {};
+
+                for (var i = 0, max = Arguments.length; i < max; i += 1) {
+                    this['var'](Arguments[i], object);
+                };
+
+                return object;
             }
         };
 
@@ -735,11 +728,12 @@
                 Evaluate(std[i], globalEnv);
                 delete globalEnv['child'];
             };
-
+            
             for (var j = 0, jmax = parseTree.length; j < jmax; j += 1) {
                 Evaluate(parseTree[j], globalEnv);
                 delete globalEnv['child'];
             };
+            console.log(globalEnv);
         }();
     };
 }());
@@ -747,9 +741,10 @@
 Heroin = function (path) {
     var data = fs.readFileSync(path, 'utf8').slice(1);
 
+    //console.log(Preprocessor(data)[1]);
     Compiler(Preprocessor(data));
 };
 
-//Heroin('./test.hrn');
+Heroin('./test.hrn');
 
 module.exports = Heroin;
