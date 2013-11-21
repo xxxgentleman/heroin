@@ -179,7 +179,7 @@
 
                 currentToken = token;
             } else {
-                currentToken= aheadToken;
+                currentToken = aheadToken;
                 consumed = true;
             };
 
@@ -194,7 +194,7 @@
                     token = scanner.nextToken();
                 };
 
-                aheadToken= token;
+                aheadToken = token;
                 consumed = false;
             };
 
@@ -239,36 +239,43 @@
 
                                 nextToken();
 
-                                while (true) {
-                                    switch (lookAhead().type) {
-                                        case 'value':
-                                            nextToken();
-                                            list.push(currentToken.text);
-                                            continue;
-                                        case 'identifier':
-                                            if (lookAhead().text === '_') {
+                                (function () {
+                                    while (true) {
+                                        switch (lookAhead().type) {
+                                            case 'value':
                                                 nextToken();
-                                                list.push([]);
-                                            } else {
-                                                nextToken();
-
-                                                if (lookAhead().type === 'value' || lookAhead().type === 'identifier') {
-                                                    list.push(currentToken.text);
-                                                } else if (lookAhead().type === 'separator') {
-                                                    var id = currentToken.text;
-
+                                                list.push(currentToken.text);
+                                                continue;
+                                            case 'identifier':
+                                                if (lookAhead().text === '_') {
                                                     nextToken();
-                                                    list.push(parseSourceCode([id]));
-                                                };
-                                            };
+                                                    list.push([]);
+                                                } else {
+                                                    nextToken();
 
-                                            continue;
-                                        case 'separator':
-                                            nextToken();
-                                            break;
-                                        default:
+                                                    if (lookAhead().type === 'value' || lookAhead().type === 'identifier' || lookAhead().text === ')') {
+                                                        list.push(currentToken.text);
+                                                    } else if (lookAhead().text === '[') {
+                                                        var id = currentToken.text;
+
+                                                        nextToken();
+                                                        list.push(parseSourceCode([id]));
+                                                    };
+                                                };
+
+                                                continue;
+                                            case 'separator':
+                                                if (lookAhead().text === ')') {
+                                                    nextToken();
+                                                    return;
+                                                } else if (lookAhead().text === '[') {
+                                                    list.push(parseSourceCode());
+                                                    continue;
+                                                };
+                                            default:
+                                        };
                                     };
-                                };
+                                }());
 
                                 if (arguments[0] !== undefined) {
                                     arguments[0].push(list);
@@ -295,7 +302,7 @@
                                 if (lookAhead().text === ']' || lookAhead().text === ';') {
                                     arguments[0].push([]);
                                 };
-
+                                
                                 continue;
                             case '{':
                                 nextToken();
@@ -374,23 +381,17 @@
     var core = ['quote', '?', 'var', '=', 'fct', 'begin', 'unquote', 'ary', 'obj',
             'atom', '==', 'car', 'cdr', 'cons',
             '+', '-', '*', '/', '%', '<', '>', 'dlt', 'tpof', 'rtn'],
-        globalEnv = {}, macroTable = {}, closureIndex = 0,
+        globalEnvironment = {}, macroTable = {},
         Primitive, FunctionCall, Macro, SymbolExchanger, VariableSearcher, CoreFunction;
 
-    VariableSearcher = function (symbol, env) {
-        for (var i = closureIndex; i >= 0; i -= 1) {
-            var buffer = globalEnv;
-
-            for (var j = 0; j < i; j += 1) {
-                buffer = buffer['child'];
-            };
-
-            if (symbol in buffer) {
-                return buffer;
-            };
+    VariableSearcher = function (symbol, environment) {
+        if (symbol in environment) {
+            return environment;
+        } else if (environment['superEnvironment']) {
+            return VariableSearcher(symbol, environment['superEnvironment']);
+        } else {
+            return false;
         };
-
-        return false;
     };
 
     SymbolExchanger = function (array, symbol, target) {
@@ -414,7 +415,7 @@
         return array;
     };
 
-    Primitive = function (symbol, env) {
+    Primitive = function (symbol, environment) {
         if (/^-?([0-9])(\d+)?(\.\d+)?$/.test(symbol)) {
             return parseFloat(symbol);
         } else if (/^\"/.test(symbol)) {
@@ -424,7 +425,7 @@
         } else if (symbol === 'false') {
             return false;
         } else {
-            var location = VariableSearcher(symbol, env);
+            var location = VariableSearcher(symbol, environment);
 
             if (location !== false) {
                 return location[symbol];
@@ -433,25 +434,25 @@
     };
 
     FunctionCall = {
-        'atom': function (Arguments, env) {
+        'atom': function (Arguments) {
             return (Array.isArray(Arguments[0]) === false || Arguments[0] === []) ? true : false;
         },
 
-        '==': function (Arguments, env) {
+        '==': function (Arguments, environment) {
             if (Array.isArray(Arguments[0]) || Array.isArray(Arguments[1])) {
                 return false;
             } else if (Arguments[0] === Arguments[1]) {
-                return (Arguments[2] !== undefined) ? this['=='](Arguments.slice(1), env) : true;
+                return (Arguments[2] !== undefined) ? this['=='](Arguments.slice(1), environment) : true;
             } else {
                 return false;
             };
         },
 
-        'car': function (Arguments, env) {
+        'car': function (Arguments) {
             return (Arguments.length === 1) ? false : Arguments.slice(0, 1)[0];
         },
 
-        'cdr': function (Arguments, env) {
+        'cdr': function (Arguments) {
             if (Arguments.length === 1) {
                 return false;
             } else if (Arguments.length === 2) {
@@ -461,7 +462,7 @@
             };
         },
 
-        'cons': function (Arguments, env) {
+        'cons': function (Arguments) {
             for (i = 0, max = Arguments[1].length; i < max; i += 1) {
                 Arguments[0].push(Arguments[1][i]);
             };
@@ -491,7 +492,7 @@
     };
 
     CoreFunction = {
-        '+': function (Arguments, env) {
+        '+': function (Arguments) {
             if (Arguments.length === 0) {
                 return 0;
             } else if (Arguments.length === 1) {
@@ -501,7 +502,7 @@
             };
         },
 
-        '-': function (Arguments, env) {
+        '-': function (Arguments) {
             if (Arguments.length === 0) {
                 return 0;
             } else if (Arguments.length === 1) {
@@ -511,7 +512,7 @@
             };
         },
 
-        '*': function (Arguments, env) {
+        '*': function (Arguments) {
             if (Arguments.length === 0) {
                 return 1;
             } else if (Arguments.length === 1) {
@@ -521,7 +522,7 @@
             };
         },
 
-        '/': function (Arguments, env) {
+        '/': function (Arguments) {
             if (Arguments.length === 0) {
                 return 1;
             } else if (Arguments.length === 1) {
@@ -531,11 +532,11 @@
             };
         },
 
-        '%': function (Arguments, env) {
+        '%': function (Arguments) {
             return Arguments[0] % Arguments[1];
         },
 
-        '<': function (Arguments, env) {
+        '<': function (Arguments) {
             if (Arguments.length > 2) {
                 if (Arguments[0] < Arguments[1]) {
                     return this['<'](Arguments.slice(1));
@@ -547,7 +548,7 @@
             };
         },
 
-        '>': function (Arguments, env) {
+        '>': function (Arguments) {
             if (Arguments.length > 2) {
                 if (Arguments[0] > Arguments[1]) {
                     return this['>'](Arguments.slice(1));
@@ -559,15 +560,15 @@
             };
         },
 
-        'dlt': function (Arguments, env) {
+        'dlt': function (Arguments) {
             delete env[Arguments[0]];
         },
 
-        'tpof': function (Arguments, env) {
+        'tpof': function (Arguments) {
             return (Array.isArray(Arguments[0])) ? 'array' : typeof Arguments[0];
         },
 
-        'rtn': function (Arguments, env) {
+        'rtn': function (Arguments) {
             return (Arguments !== []) ? Arguments.unshift('rtn') : 'rtn';
         }
     };
@@ -575,35 +576,35 @@
     Compiler = function (parseTree) {
         var Evaluate, Apply, Special;
 
-        Evaluate = function (Expression, env) {
+        Evaluate = function (Expression, environment) {
             if (!Array.isArray(Expression)) {
-                return Primitive(Expression, env);
+                return Primitive(Expression, environment);
             } else {
                 if (core.indexOf(Expression[0]) !== -1 || Expression[0] === 'macro' || Expression[0] in macroTable || Expression[0] in globalEnv) {
-                    return Apply(Expression[0], Expression.slice(1), env);
+                    return Apply(Expression[0], Expression.slice(1), environment);
                 } else if (/\./.test(Expression[0]) || Array.isArray(Expression[0])) {
                     if (/\./.test(Expression[0])) {
                         Expression[0] = Expression[0].split('.');
                     };
 
-                    return Apply(Expression[0], Expression.slice(1), env);
+                    return Apply(Expression[0], Expression.slice(1), environment);
                 };
             };
         };
 
-        Apply = function (Procedure, Arguments, env) {
+        Apply = function (Procedure, Arguments, environment) {
             if (Procedure === 'macro') {
                 return Macro(Arguments.shift(), Arguments);
             } else if (Procedure in macroTable) {
-                return Evaluate(macroTable[Procedure].apply(this, Arguments), env);
+                return Evaluate(macroTable[Procedure].apply(this, Arguments), environment);
             } else if (Procedure in Special) {
-                return Special[Procedure](Arguments, env);
+                return Special[Procedure](Arguments, environment);
             } else {
                 for (var i = 0, max = Arguments.length; i < max; i += 1) {
                     if (Arguments[i][0] === 'quote') {
-                        Arguments = Evaluate(Arguments[i], env);
+                        Arguments = Evaluate(Arguments[i], environment);
                     } else {
-                        Arguments[i] = Evaluate(Arguments[i], env);
+                        Arguments[i] = Evaluate(Arguments[i], environment);
                     };
                 };
 
@@ -619,62 +620,70 @@
                     call.apply(this, Arguments);
                 } else {
                     if (Procedure in FunctionCall) {
-                        return FunctionCall[Procedure](Arguments, env);
+                        return FunctionCall[Procedure](Arguments, environment);
                     } else if (Procedure in CoreFunction) {
-                        return CoreFunction[Procedure](Arguments, env);
+                        return CoreFunction[Procedure](Arguments, environment);
                     } else if (Procedure in globalEnv) {
-                        return globalEnv[Procedure](Arguments, env);
+                        return globalEnv[Procedure](Arguments, environment);
                     };
                 };
             };
         };
 
         Special = {
-            'quote': function (Arguments, env) {
+            'quote': function (Arguments) {
                 return (Arguments.length === 1) ? Arguments[0] : Arguments;
             },
 
-            '?': function (Arguments, env) {
+            '?': function (Arguments, environment) {
                 if (Arguments[1] === undefined) {
                     return (Arguments[0] === []) ? false : Evaluate(Arguments[0]);
-                } else if (Evaluate(Arguments[0][0], env)) {
-                    return Evaluate(Arguments[0][1], env);
+                } else if (Evaluate(Arguments[0][0], environment)) {
+                    return Evaluate(Arguments[0][1], environment);
                 } else {
-                    return this['?'](Arguments.slice(1), env);
+                    return this['?'](Arguments.slice(1), environment);
                 };
             },
 
-            'var': function (Arguments, env) {
-                var key = Array.isArray(Arguments[0]) ? Evaluate(Arguments[0], env) : Arguments[0];
-
-                env[key] = Evaluate(Arguments[1], env);
-
-                return key;
-            },
-
-            '=': function (Arguments, env) {
-                var key = Array.isArray(Arguments[0]) ? Evaluate(Arguments[0], env) : Arguments[0],
-                    targetEnv = VariableSearcher(key, env);
-
-                if (targetEnv !== false) {
-                    targetEnv[key] = Evaluate(Arguments[1], env);
-                };
-
-                return key;
-            },
-
-            'fct': function (Arguments, env) {
-                var lambda = function () {
-                    arguments[1]['child'] = {};
-                    closureIndex += 1;
+            'var': function (Arguments, environment) {
+                if (Array.isArray(Arguments[0])) {
                     for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                        SymbolExchanger(Arguments[1], Arguments[0][i], arguments[0][i]);
+                        this['var']([Arguments[0][i], Arguments[1][i]], environment);
+                    };
+                } else {
+                    environment[Arguments[0]] = Evaluate(Arguments[1], environment);
+
+                    return Arguments[0];
+                };
+            },
+
+            '=': function (Arguments, environment) {
+                if (Array.isArray(Arguments[0])) {
+                    for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
+                        this['=']([Arguments[0][i], Arguments[1][i]], environment);
+                    };
+                } else {
+                    var targetEnvironment = VariableSearcher(Arguments[0], environment);
+
+                    if (targetEnvironment !== false) {
+                        targetEnvironment[Arguments[0]] = Evaluate(Arguments[1], environment);
+                    } else {
+                        return false;
+                    };
+                };
+            },
+
+            'fct': function (Arguments, environment) {
+                var lambda = function () {
+                    environment['subEnvironment'] = { 'superEnvironment': environment };
+
+                    for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
+                        Arguments[1] = SymbolExchanger(Arguments[1], Arguments[0][i], arguments[0][i]);
                     };
 
-                    var result = Evaluate(Arguments[1], arguments[1]['child']);
+                    var result = Evaluate(Arguments[1], environment['subEnvironment']);
 
-                    delete arguments[1]['child'];
-                    closureIndex -= 1;
+                    delete environment['subEnvironment'];
 
                     return result;
                 };
@@ -682,12 +691,12 @@
                 return (Arguments[2]) ? lambda.apply(this, Arguments[2]) : lambda;
             },
 
-            'begin': function (Arguments, env) {
+            'begin': function (Arguments, environment) {
                 for (var i = 0, max = Arguments.length; i < max; i += 1) {
                     if (i === max - 1) {
-                        return Evaluate(Arguments[i], env);
+                        return Evaluate(Arguments[i], environment);
                     } else {
-                        var result = Evaluate(Arguments[i], env);
+                        var result = Evaluate(Arguments[i], environment);
                         
                         if (Arguments[i][0] === 'rtn') {
                             return result;
@@ -696,15 +705,15 @@
                 };
             },
 
-            'unquote': function (Arguments, env) {
-                return Evaluate(Evaluate(Arguments[0], env), env);
+            'unquote': function (Arguments, environment) {
+                return Evaluate(Evaluate(Arguments[0], environment), environment);
             },
 
-            'ary': function (Arguments, env) {
+            'ary': function (Arguments, environment) {
                 var array = [];
 
                 for (var i = 0, max = Arguments.length; i < max; i += 1) {
-                    array.push(Evaluate(Arguments[i]));
+                    array.push(Evaluate(Arguments[i], environment));
                 };
 
                 return array;
@@ -725,15 +734,15 @@
             var std = Preprocessor(fs.readFileSync('./std.hrn', 'utf8').slice(1));
             
             for (var i = 0, imax = std.length; i < imax; i += 1) {
-                Evaluate(std[i], globalEnv);
-                delete globalEnv['child'];
+                Evaluate(std[i], globalEnvironment);
+                delete globalEnvironment['subEnvironment'];
             };
             
             for (var j = 0, jmax = parseTree.length; j < jmax; j += 1) {
-                Evaluate(parseTree[j], globalEnv);
-                delete globalEnv['child'];
+                Evaluate(parseTree[j], globalEnvironment);
+                delete globalEnvironment['subEnvironment'];
             };
-            console.log(globalEnv);
+            console.log(globalEnvironment);
         }();
     };
 }());
@@ -741,7 +750,7 @@
 Heroin = function (path) {
     var data = fs.readFileSync(path, 'utf8').slice(1);
 
-    //console.log(Preprocessor(data)[1]);
+    //console.log(Preprocessor(data)[0]);      // to test the parser
     Compiler(Preprocessor(data));
 };
 
