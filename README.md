@@ -72,6 +72,16 @@ It's just a LISP-like implentation based on node.js.
 > step 3. just node it and see what happen
 > I think this module must have a lot of bugs to kill, a lot of exceptation to deal.
 
+### 中文版在此
+
+> heroin是一個在node.js平台上的類LISP實作, 目的是為了實現M表達式版的LISP, 語法如下:
+
+	functionName[argument1; argument2; argument3]
+
+> 在控制結構上, 則是用下述的語法來實作if/else的功能:
+
+	[condition1 -> then1; condition2 -> then2; condition3 -> then3; else]
+
 ### License
 
 [MIT](http://opensource.org/licenses/MIT)
