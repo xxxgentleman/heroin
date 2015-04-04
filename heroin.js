@@ -2,7 +2,7 @@
     Preprocessor, Compiler, Heroin;
 
 (function () {
-    var Reader, Tokens, States, Scanner, Parser;
+    var Reader, States, Scanner, Parser;
 
     Reader = function (string) {
         var data = string,
@@ -15,16 +15,11 @@
                     return '-1';
                 };
 
-                currentPosition += 1;
-
-                return data[currentPosition - 1];
+                return data.charAt(currentPosition++);
             },
 
             retract: function (n) {
-                if (n === undefined) {
-                    n = 1;
-                };
-
+                n = (n === undefined) ? 1 : n;
                 currentPosition -= n;
 
                 if (n === 1 && currentPosition >= dataLength) {
@@ -45,329 +40,262 @@
     States.NUMBER_STATE = States.COMMENT_STATE + 1;
     States.IDENTIFIER_STATE = States.NUMBER_STATE + 1;
 
-    Scanner = function (reader) {
-        var reader = reader,
-            currentLine = 1,
-            state = States.START_STATE,
-            numDots = 0;
+	Scanner = function (reader) {
+		var nextCharacter = reader.nextCharacter,
+			retract = reader.retract,
+			currentLine = 1,
+			state = States.START_STATE,
+			numDots = 0;
 
-        return {
-            nextToken: function () {
-                var bufferString = '';
+		return {
+			nextToken: function () {
+				var bufferString = '';
 
-                while (true) {
-                    switch (state) {
-                        case States.START_STATE:
-                            var character = reader.nextCharacter();
+				while (true) {
+					switch (state) {
+						case States.START_STATE:
+							var character = nextCharacter();
 
-                            switch (character) {
-                                case '-1': case ';': case '(': case ')': case '[': case ']': case '{': case '}':
-                                    return { type: 'separator', text: character };
-                                case '\r': case '\n':
-                                    currentLine += 1;
-                                    break;
-                                case '"':
-                                    state = States.STRING_STATE;
-                                    bufferString = character;
-                                    break;
-                                case '#':
-                                    state = States.COMMENT_STATE;
-                                    bufferString = character;
-                                    break;
-                                case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-                                    state = States.NUMBER_STATE;
-                                    bufferString = character;
-                                    break;
-                                case '-':
-                                    bufferString = character;
+							switch (character) {
+								case '-1': case ',': case ';': case '(': case ')': case '[': case ']': case '{': case '}':
+									return { type: 'separator', text: character };
+								case '\r': case '\n':
+									currentLine += 1;
+									break;
+								case "'":
+									state = States.STRING_STATE;
+									bufferString = character;
+									break;
+								case '#':
+									state = States.COMMENT_STATE;
+									bufferString = character;
+									break;
+								case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+									state = States.NUMBER_STATE;
+									bufferString = character;
+									break;
+								case '-':
+									bufferString = character;
+									state = (/\d/.test(reader.nextCharacter())) ? States.NUMBER_STATE : States.IDENTIFIER_STATE;
+									retract();
+									break;
+								default:
+									if (!/\s/.test(character)) {
+										state = States.IDENTIFIER_STATE;
+										bufferString = character;
+									};
+							};
 
-                                    state = (/\d/.test(reader.nextCharacter())) ? States.NUMBER_STATE : States.IDENTIFIER_STATE;
-                                    reader.retract();
-                                    break;
-                                default:
-                                    if (!/\s/.test(character)) {
-                                        state = States.IDENTIFIER_STATE;
-                                        bufferString = character;
-                                    };
-                            };
+							break;
+						case States.STRING_STATE:
+							var character = nextCharacter();
 
-                            break;
-                        case States.STRING_STATE:
-                            var character = reader.nextCharacter();
+							while (character !== "'") {
+								bufferString += character;
+								character = nextCharacter();
+							};
 
-                            while (character !== '"') {
-                                bufferString += character;
-                                character = reader.nextCharacter();
-                            };
+							bufferString += character;
+							state = States.START_STATE;
 
-                            bufferString += character;
-                            state = States.START_STATE;
+							return { type: 'value', text: bufferString };
+						case States.COMMENT_STATE:
+							var character = nextCharacter();
 
-                            return { type: 'value', text: bufferString };
-                        case States.COMMENT_STATE:
-                            var character = reader.nextCharacter();
+							while (character !== '\r' && character !== '\n' && character !== '-1') {
+								bufferString += character;
+								character = nextCharacter();
+							};
 
-                            while (character !== '\r' && character !== '\n' && character !== '-1') {
-                                bufferString += character;
-                                character = reader.nextCharacter();
-                            };
+							state = States.START_STATE;
 
-                            state = States.START_STATE;
+							return { type: 'comment', text: bufferString };
+						case States.NUMBER_STATE:
+							var character = nextCharacter();
 
-                            return { type: 'comment', text: bufferString };
-                        case States.NUMBER_STATE:
-                            var character = reader.nextCharacter();
+							while (/[\d\.]/.test(character)) {
+								if (character === '.') {
+									if (numDots > 1) {
+										break;
+									} else {
+										numDots += 1;
+									};
+								};
 
-                            while (/[\d\.]/.test(character)) {
-                                if (character === '.') {
-                                    if (numDots > 1) {
-                                        break;
-                                    } else {
-                                        numDots += 1;
-                                    };
-                                };
+								bufferString += character;
+								character = nextCharacter();
+							};
 
-                                bufferString += character;
-                                character = reader.nextCharacter();
-                            };
+							retract();
+							state = States.START_STATE;
 
-                            reader.retract();
-                            state = States.START_STATE;
+							return { type: 'value', text: parseFloat(bufferString) };
+						case States.IDENTIFIER_STATE:
+							var character = nextCharacter();
 
-                            return { type: 'value', text: bufferString };
-                        case States.IDENTIFIER_STATE:
-                            var character = reader.nextCharacter();
+							while (/[^\,\;\(\)\[\]\{\}\"\'\#\r\n\s]/.test(character)) {
+								bufferString += character;
+								character = nextCharacter();
+							};
 
-                            while (/[^\;\(\)\[\]\{\}\"\#\r\n\s]/.test(character)) {
-                                bufferString += character;
-                                character = reader.nextCharacter();
-                            };
+							retract();
+							state = States.START_STATE;
 
-                            reader.retract();
-                            state = States.START_STATE;
+							if (bufferString === 'true' || bufferString === 'false') {
+								return { type: 'value', text: bufferString === 'true' };
+							} else if (bufferString === '->') {
+								return { type: 'separator', text: bufferString };
+							} else if (!/\.\.|\.$/.test(bufferString)) {
+								return { type: 'identifier', text: bufferString };
+							};
 
-                            if (bufferString === 'true' || bufferString === 'false') {
-                                return { type: 'value', text: bufferString };
-                            } else if (bufferString === '->') {
-                                return { type: 'separator', text: bufferString };
-                            } else if (!/\.\.|\.$/.test(bufferString)) {
-                                return { type: 'identifier', text: bufferString };
-                            };
+							break;
+						default:
+					};
+				};
+			}
+		};
+	};
 
-                            break;
-                        default:
-                    };
-                };
-            }
-        };
-    };
+	Parser = function (scanner) {
+		var nextToken = scanner.nextToken,
+			consumed = true,
+			advance, lookAhead, parse, currentToken, aheadToken, currentType, currentText;
 
-    Parser = function (scanner) {
-        var scanner = scanner,
-            currentToken = {},
-            aheadToken = {},
-            consumed = true,
-            nextToken, lookAhead, parseSourceCode;
+		advance = function () {
+			if (consumed) {
+				var token = nextToken();
 
-        nextToken = function () {
-            if (consumed) {
-                var token = scanner.nextToken();
+				while (token.type === 'comment') {
+					token = nextToken();
+				};
 
-                while (token.type === 'comment') {
-                    token = scanner.nextToken();
-                };
+				currentToken = token;
+			} else {
+				currentToken = aheadToken;
+				consumed = true;
+			};
 
-                currentToken = token;
-            } else {
-                currentToken = aheadToken;
-                consumed = true;
-            };
+			currentType = currentToken.type;
+			currentText = currentToken.text;
+		};
 
-            return currentToken;
-        };
+		lookAhead = function (prop) {
+			if (consumed) {
+				var token = nextToken();
 
-        lookAhead = function () {
-            if (consumed) {
-                var token = scanner.nextToken();
+				while (token.type === 'comment') {
+					token = nextToken();
+				};
 
-                while (token.type === 'comment') {
-                    token = scanner.nextToken();
-                };
+				aheadToken = token;
+				consumed = false;
+			};
 
-                aheadToken = token;
-                consumed = false;
-            };
+			return (prop === 'type') ? aheadToken.type : aheadToken.text;
+		};
 
-            return aheadToken;
-        };
+		parse = function () {
+			var list = arguments[0];
 
-        parseSourceCode = function () {
-            while (true) {
-                switch (lookAhead().type) {
-                    case 'identifier':
-                        nextToken();
+			while (true) {
+				switch (lookAhead('type')){
+					case 'identifier':
+						advance();
 
-                        switch (lookAhead().text) {
-                            case '[':
-                                var id = currentToken.text;
+						switch (lookAhead('text')) {
+							case '(':
+								var newList = [currentText];
 
-                                nextToken();
+								advance();
 
-                                if (arguments[0] !== undefined) {
-                                    arguments[0].push(parseSourceCode([id]));
-                                } else {
-                                    return parseSourceCode([id]);
-                                };
+								if (list !== undefined) {
+									list.push(parse(newList));
+								} else {
+									return parse(newList);
+								};
 
-                                continue;
-                            case ';': case ']': case '->':
-                                if (arguments[0] !== undefined) {
-                                    arguments[0].push(currentToken.text);
-                                } else {
-                                    return currentToken.text;
-                                };
+								continue;
+							case ',': case ')': case '->':
+								if (list !== undefined) {
+									list.push((currentText === '_') ? [] : currentText);
+								} else {
+									return currentText;
+								};
 
-                                continue;
-                            default:
-                        };
+								continue;
+							default:
+						};
 
-                        continue;
-                    case 'separator':
-                        switch (lookAhead().text) {
-                            case '(':
-                                var list = ['quote'];
+						continue;
+					case 'value':
+						advance();
 
-                                nextToken();
+						if (list !== undefined) {
+							list.push(currentText);
+						} else {
+							return currentText;
+						};
 
-                                (function () {
-                                    while (true) {
-                                        switch (lookAhead().type) {
-                                            case 'value':
-                                                nextToken();
-                                                list.push(currentToken.text);
-                                                continue;
-                                            case 'identifier':
-                                                if (lookAhead().text === '_') {
-                                                    nextToken();
-                                                    list.push([]);
-                                                } else {
-                                                    nextToken();
+						continue;
+					case 'separator':
+						switch (lookAhead('text')) {
+							case '(': case '[': case '{':
+								var atom = (lookAhead('text') === '[') ? 'quote' : 'begin',
+									newList = (lookAhead('text') === '(') ? [] : [atom];
 
-                                                    if (lookAhead().type === 'value' || lookAhead().type === 'identifier' || lookAhead().text === ')') {
-                                                        list.push(currentToken.text);
-                                                    } else if (lookAhead().text === '[') {
-                                                        var id = currentToken.text;
+								advance();
 
-                                                        nextToken();
-                                                        list.push(parseSourceCode([id]));
-                                                    };
-                                                };
+								if (list !== undefined) {
+									list.push(parse(newList));
+								} else {
+									return parse(newList);
+								};
 
-                                                continue;
-                                            case 'separator':
-                                                if (lookAhead().text === ')') {
-                                                    nextToken();
-                                                    return;
-                                                } else if (lookAhead().text === '[') {
-                                                    list.push(parseSourceCode());
-                                                    continue;
-                                                };
-                                            default:
-                                        };
-                                    };
-                                }());
+								continue;
+							case '->':
+								advance();
 
-                                if (arguments[0] !== undefined) {
-                                    arguments[0].push(list);
-                                } else {
-                                    return list;
-                                };
+								if (list[0] !== '?') {
+									list.unshift('?');
+								};
 
-                                continue;
-                            case '[':
-                                nextToken();
+								continue;
+							case ',':
+								advance();
 
-                                var exp = (lookAhead().text === ';') ? [[]] : [];
+								continue;
+							case ')': case ']': case '}':
+								advance();
 
-                                if (arguments[0] !== undefined) {
-                                    arguments[0].push(parseSourceCode(exp));
-                                } else {
-                                    return parseSourceCode(exp);
-                                };
+								return list;
+							default:
+						};
+					default:
+				};
+			};
+		};
 
-                                continue;
-                            case ';':
-                                nextToken();
+		return function () {
+			var parseTree = [];
 
-                                if (lookAhead().text === ']' || lookAhead().text === ';') {
-                                    arguments[0].push([]);
-                                };
-                                
-                                continue;
-                            case '{':
-                                nextToken();
+			while (true) {
+				parseTree.push(parse());
 
-                                if (arguments[0] !== undefined) {
-                                    arguments[0].push(parseSourceCode(['unquote']));
-                                } else {
-                                    return parseSourceCode(['unquote']);
-                                };
+				if (lookAhead('type') === 'separator' && lookAhead('text') === ';') {
+					advance();
 
-                                continue;
-                            case '->':
-                                nextToken();
+					if (lookAhead('type') === 'separator' && lookAhead('text') === '-1') {
+						break;
+					};
+				} else {
+					return ['please end a sentence with a semicolon'];
+				};
+			};
 
-                                if (arguments[0][0] !== '?') {
-                                    arguments[0].unshift('?');
-                                };
-
-                                arguments[0][arguments[0].length - 1] = [arguments[0][arguments[0].length - 1]];
-
-                                if (lookAhead().text === '[') {
-                                    arguments[0][arguments[0].length - 1].push(parseSourceCode([]));
-                                } else {
-                                    arguments[0][arguments[0].length - 1].push(parseSourceCode());
-                                };
-
-                                continue;
-                            case ']': case '}':
-                                nextToken();
-                                return arguments[0];
-                            default:
-                        };
-                    case 'value':
-                        nextToken();
-
-                        if (arguments[0] !== undefined) {
-                            arguments[0].push(currentToken.text);
-                        } else {
-                            return currentToken.text;
-                        };
-
-                        continue;
-                    default:
-                };
-            };
-        };
-
-        return function () {
-            var parseTree = [];
-
-            while (true) {
-                parseTree.push(parseSourceCode());
-
-                while (lookAhead().type === 'comment') {
-                    nextToken();
-                };
-
-                if (lookAhead().type === 'separator' && lookAhead().text === '-1') {
-                    break;
-                };
-            };
-
-            return parseTree;
-        }();
-    };
+			return parseTree;
+		}();
+	};
 
     Preprocessor = function (string) {
         var reader = Reader(string),
