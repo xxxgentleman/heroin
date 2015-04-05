@@ -48,7 +48,7 @@ It's just a LISP-like implentation based on node.js.
 >	So to create a standard module to set the basic and useful function and macro is a good way.
 >   No looping operators? I think it can be created by recursive of [condition -> then; true -> else], like this:
 	
-	macro[loop; [body]; [true -> begin[body; loop[body]]]]
+	macro(loop, (body), (true -> {body, loop(body)}));
 
 ### compare with LISP for now
 
