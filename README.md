@@ -55,10 +55,10 @@ It's just a LISP-like implentation based on node.js.
 	LISP							heroin
 	(QUOTE A B C)					[A, B, C];
 	(CONS '(A B) C)					cons([A, B], C);
-	(CAR '(A B))					car([A B]);
+	(CAR '(A B))					car([A, B]);
 	(CDR '(A B))					cdr([A, B]);
 	(EQ A B)						==(A, B);
-	(ATOM A)						atom(A)
+	(ATOM A)						atom(A);
 	(COND (P1 E1) (P2 E2))			(P1 -> E1, P2 -> E2);
 
 ### special form
