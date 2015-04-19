@@ -57,7 +57,7 @@
 							var character = nextCharacter();
 
 							switch (character) {
-								case '-1': case ',': case ';': case '(': case ')': case '[': case ']': case '{': case '}':
+								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':
 									return { type: 'separator', text: character };
 								case '\r': case '\n':
 									currentLine += 1;
@@ -76,7 +76,7 @@
 									break;
 								case '-':
 									bufferString = character;
-									state = (/\d/.test(reader.nextCharacter())) ? States.NUMBER_STATE : States.IDENTIFIER_STATE;
+									state = (/\d/.test(nextCharacter())) ? States.NUMBER_STATE : States.IDENTIFIER_STATE;
 									retract();
 									break;
 								default:
@@ -133,7 +133,7 @@
 						case States.IDENTIFIER_STATE:
 							var character = nextCharacter();
 
-							while (/[^\,\;\(\)\[\]\{\}\"\'\#\r\n\s]/.test(character)) {
+							while (/[^\,\;\^\(\)\[\]\{\}\"\'\#\r\n\s]/.test(character)) {
 								bufferString += character;
 								character = nextCharacter();
 							};
@@ -159,8 +159,9 @@
 
 	Parser = function (scanner) {
 		var nextToken = scanner.nextToken,
+			open = ['(', '{'],
 			consumed = true,
-			advance, lookAhead, parse, currentToken, aheadToken, currentType, currentText;
+			advance, lookAhead, parse, parseCond, currentToken, aheadToken, currentType, currentText;
 
 		advance = function () {
 			if (consumed) {
@@ -196,7 +197,7 @@
 		};
 
 		parse = function () {
-			var list = arguments[0];
+			var list, flag;
 
 			while (true) {
 				switch (lookAhead('type')){
@@ -205,25 +206,14 @@
 
 						switch (lookAhead('text')) {
 							case '(':
-								var newList = [currentText];
-
+								list = [currentText];
 								advance();
-
-								if (list !== undefined) {
-									list.push(parse(newList));
-								} else {
-									return parse(newList);
-								};
+								list.push(open.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
+								flag = list[1];
 
 								continue;
-							case ',': case ')': case '->':
-								if (list !== undefined) {
-									list.push((currentText === '_') ? [] : currentText);
-								} else {
-									return currentText;
-								};
-
-								continue;
+							case ',': case ')': case ']': case '->': case '^':
+								return currentText;
 							default:
 						};
 
@@ -231,47 +221,60 @@
 					case 'value':
 						advance();
 
-						if (list !== undefined) {
-							list.push(currentText);
-						} else {
-							return currentText;
-						};
-
-						continue;
+						return typeof currentText === 'boolean' ? ['quote', [[currentText], null]] : currentText;
 					case 'separator':
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
-								var atom = (lookAhead('text') === '[') ? 'quote' : 'begin',
-									newList = (lookAhead('text') === '(') ? [] : [atom];
-
+								list = (lookAhead('text') === '{') ? ['progn'] : (lookAhead('text') === '[') ? ['quote'] : [];
 								advance();
+								list.push(open.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
+								flag = list[1] ? list[1] : list[0];
 
-								if (list !== undefined) {
-									list.push(parse(newList));
-								} else {
-									return parse(newList);
-								};
+								continue;
+							case ',': case '^':
+								advance();
+								flag.push((open.indexOf(lookAhead('text')) === -1 && currentText !== '^') ? [parse()] : parse());
+								flag = flag[1];
 
 								continue;
 							case '->':
 								advance();
-
-								if (list[0] !== '?') {
-									list.unshift('?');
-								};
-
-								continue;
-							case ',':
-								advance();
+								list = parseCond(flag);
 
 								continue;
 							case ')': case ']': case '}':
 								advance();
 
+								if (flag[0] && !flag[1]) {
+									flag[1] = null;
+								};
+
 								return list;
 							default:
 						};
 					default:
+				};
+			};
+		};
+
+		parseCond = function (conds) {
+			var car, flag;
+
+			while (true) {
+				if (lookAhead('text') === ',') {
+					advance();
+					car = parse();
+				} else if (lookAhead('text') === '->') {
+					advance();
+					flag.push([[car, [parse(), null]]]);
+					flag = flag[1];
+				} else if (lookAhead('text') === ')') {
+					flag[1] = null;
+
+					return conds;
+				} else {
+					conds = ['cond', [[conds[0], [parse(), null]]]];
+					flag = conds[1];
 				};
 			};
 		};
@@ -289,7 +292,7 @@
 						break;
 					};
 				} else {
-					return ['please end a sentence with a semicolon'];
+					return ['Please use a semicolon to end the sentence.'];
 				};
 			};
 
