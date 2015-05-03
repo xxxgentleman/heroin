@@ -18,11 +18,10 @@
                 return data.charAt(currentPosition++);
             },
 
-            retract: function (n) {
-                n = (n === undefined) ? 1 : n;
-                currentPosition -= n;
+            retract: function () {
+                currentPosition -= 1;
 
-                if (n === 1 && currentPosition >= dataLength) {
+                if (currentPosition >= dataLength) {
                     return;
                 };
 
@@ -159,7 +158,6 @@
 
 	Parser = function (scanner) {
 		var nextToken = scanner.nextToken,
-			open = ['(', '{'],
 			consumed = true,
 			advance, lookAhead, parse, parseCond, currentToken, aheadToken, currentType, currentText;
 
@@ -208,12 +206,12 @@
 							case '(':
 								list = [currentText];
 								advance();
-								list.push(open.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
+								list.push(parse());
 								flag = list[1];
 
 								continue;
 							case ',': case ')': case ']': case '->': case '^':
-								return currentText;
+								return [currentText];
 							default:
 						};
 
@@ -221,19 +219,19 @@
 					case 'value':
 						advance();
 
-						return typeof currentText === 'boolean' ? ['quote', [[currentText], null]] : currentText;
+						return typeof currentText === 'boolean' ? ['quote', [currentText, null]] : [currentText];
 					case 'separator':
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
-								list = (lookAhead('text') === '{') ? ['progn'] : (lookAhead('text') === '[') ? ['quote'] : [];
+								list = (lookAhead('text') === '{') ? ['progn'] : [];
 								advance();
-								list.push(open.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
+								list.push(parse());
 								flag = list[1] ? list[1] : list[0];
 
 								continue;
 							case ',': case '^':
 								advance();
-								flag.push((open.indexOf(lookAhead('text')) === -1 && currentText !== '^') ? [parse()] : parse());
+								flag.push(parse());
 								flag = flag[1];
 
 								continue;
@@ -249,7 +247,7 @@
 									flag[1] = null;
 								};
 
-								return list;
+								return currentText === ']' ? ['quote', [list, null]] : list;
 							default:
 						};
 					default:
@@ -279,25 +277,19 @@
 			};
 		};
 
-		return function () {
-			var parseTree = [];
-
-			while (true) {
-				parseTree.push(parse());
+		return {
+			nextSentence: function () {
+				var sentence = parse();
 
 				if (lookAhead('type') === 'separator' && lookAhead('text') === ';') {
 					advance();
-
-					if (lookAhead('type') === 'separator' && lookAhead('text') === '-1') {
-						break;
-					};
 				} else {
 					return ['Please use a semicolon to end the sentence.'];
 				};
-			};
 
-			return parseTree;
-		}();
+				return sentence;
+			}
+		};
 	};
 
     Preprocessor = function (string) {
