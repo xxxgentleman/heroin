@@ -223,15 +223,14 @@
 					case 'separator':
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
-								list = (lookAhead('text') === '{') ? ['progn'] : [];
 								advance();
-								list.push(parse());
+								list = currentText === '{' ? ['progn', [parse()]] : [parse()];
 								flag = list[1] ? list[1] : list[0];
 
 								continue;
-							case ',': case '^':
+							case ',': case '^': case ';':
 								advance();
-								flag.push(parse());
+								flag.push(currentText === ';' ? [parse()] : parse());
 								flag = flag[1];
 
 								continue;
