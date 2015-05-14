@@ -1,5 +1,6 @@
 ﻿var fs = require('fs'),
-    Preprocessor, Compiler, Heroin;
+    global = [],
+    Reader, Scanner, Parser, Eval, Heroin;
 
 (function () {
     var Reader, States, Scanner, Parser;
@@ -31,8 +32,11 @@
             }
         };
     };
+}());
 
-    States = {};
+(function () {
+    var States = {};
+
     States.START_STATE = 0;
     States.STRING_STATE = States.START_STATE + 1;
     States.COMMENT_STATE = States.STRING_STATE + 1;
@@ -155,10 +159,13 @@
 			}
 		};
 	};
+}());
 
+(function () {
 	Parser = function (scanner) {
 		var nextToken = scanner.nextToken,
 			consumed = true,
+            pnb = ['(', '{'],
 			advance, lookAhead, parse, parseCond, currentToken, aheadToken, currentType, currentText;
 
 		advance = function () {
@@ -206,12 +213,19 @@
 							case '(':
 								list = [currentText];
 								advance();
-								list.push(parse());
+
+								if (lookAhead('text') === ')') {
+								    list.push([]);
+
+								    return list;
+								};
+
+								list.push(pnb.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
 								flag = list[1];
 
 								continue;
 							case ',': case ')': case ']': case '->': case '^':
-								return [currentText];
+								return currentText;
 							default:
 						};
 
@@ -219,18 +233,24 @@
 					case 'value':
 						advance();
 
-						return typeof currentText === 'boolean' ? ['quote', [currentText, null]] : [currentText];
+						return typeof currentText === 'boolean' ? ['quote', [currentText, false]] : currentText;
 					case 'separator':
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
-								advance();
-								list = currentText === '{' ? ['progn', [parse()]] : [parse()];
+							    advance();
+							    list = currentText === '{' ? ['prog'] : [];
+
+							    if (lookAhead('text') === ')') {
+							        return list;
+							    };
+
+							    list.push(pnb.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
 								flag = list[1] ? list[1] : list[0];
 
 								continue;
 							case ',': case '^': case ';':
 								advance();
-								flag.push(currentText === ';' ? [parse()] : parse());
+								flag.push((pnb.indexOf(lookAhead('text')) === -1 && currentText !== '^') ? [parse()] : parse());
 								flag = flag[1];
 
 								continue;
@@ -242,11 +262,13 @@
 							case ')': case ']': case '}':
 								advance();
 
-								if (flag[0] && !flag[1]) {
-									flag[1] = null;
+								if (currentText === ']' && !list[0][1] && !isArray(list[0][0])) {
+								    list = list[0];
+								} else if (flag[0] && !flag[1]) {
+								    flag[1] = false;
 								};
 
-								return currentText === ']' ? ['quote', [list, null]] : list;
+								return currentText === ']' ? ['quote', [list[0], false]] : list;
 							default:
 						};
 					default:
@@ -258,19 +280,19 @@
 			var car, flag;
 
 			while (true) {
-				if (lookAhead('text') === ',') {
+				if (lookAhead('text') === ';') {
 					advance();
 					car = parse();
 				} else if (lookAhead('text') === '->') {
 					advance();
-					flag.push([[car, [parse(), null]]]);
+					flag.push([[car, [parse(), false]]]);
 					flag = flag[1];
 				} else if (lookAhead('text') === ')') {
-					flag[1] = null;
+					flag[1] = false;
 
 					return conds;
 				} else {
-					conds = ['cond', [[conds[0], [parse(), null]]]];
+					conds = ['cond', [[conds[0], [parse(), false]]]];
 					flag = conds[1];
 				};
 			};
@@ -290,392 +312,152 @@
 			}
 		};
 	};
-
-    Preprocessor = function (string) {
-        var reader = Reader(string),
-            scanner = Scanner(reader);
-
-        return Parser(scanner);
-    };
 }());
 
 (function () {
-    var core = ['quote', '?', 'var', '=', 'fct', 'begin', 'unquote', 'ary', 'obj',
-            'atom', '==', 'car', 'cdr', 'cons',
-            '+', '-', '*', '/', '%', '<', '>', 'dlt', 'tpof', 'rtn'],
-        globalEnvironment = {}, macroTable = {},
-        Primitive, FunctionCall, Macro, SymbolExchanger, VariableSearcher, CoreFunction;
+    var isArray = Array.isArray,
+        car, cdr, cons, atom, eq, evcon, apply, Null, primitive, assoc, equal, evlis, pairlis;
 
-    VariableSearcher = function (symbol, environment) {
-        if (symbol in environment) {
-            return environment;
-        } else if (environment['superEnvironment']) {
-            return VariableSearcher(symbol, environment['superEnvironment']);
-        } else {
-            return false;
-        };
+    car = function (x) {
+        return isArray(x) ? x[0] : undefined;
     };
 
-    SymbolExchanger = function (array, symbol, target) {
-        for (var i = 0, imax = array.length; i < imax; i += 1) {
-            if (Array.isArray(array[i])) {
-                array[i] = SymbolExchanger(array[i], symbol, target);
-            };
-
-            if (array[i] === symbol) {
-                if (symbol==='body') {
-                    for (var j = 0, jmax = target.length; j < jmax; j += 1) {
-                        array.splice(i + j, j === 0 ? 1 : 0, target[j]);
-                        imax += j;
-                    };
-                } else {
-                    array.splice(i, 1, target);
-                };
-            };
-        };
-
-        return array;
+    cdr = function (x) {
+        return isArray(x) ? x[1] : undefined;
     };
 
-    Primitive = function (symbol, environment) {
-        if (/^-?([0-9])(\d+)?(\.\d+)?$/.test(symbol)) {
-            return parseFloat(symbol);
-        } else if (/^\"/.test(symbol)) {
-            return symbol.slice(1, -1);
-        } else if (symbol === 'true') {
+    cons = function (x, y) {
+        return [x, y];
+    };
+
+    atom = function (x) {
+        return isArray(x) ? (x.length === 0 ? true : false) : true;
+    };
+
+    eq = function (x, y) {
+        return x === y;
+    };
+
+    Null = function (x) {
+        return x === false;
+    };
+
+    primitive = function (form) {
+        var typeofForm = typeof form;
+
+        if (typeofForm === 'string' && form[0] === "'") {
             return true;
-        } else if (symbol === 'false') {
+        } else {
+            return typeofForm === 'number' || typeofForm === 'boolean';
+        };
+    };
+
+    equal = function (x, y) {
+        if (atom(x)) {
+            if (atom(y)) {
+                return eq(x, y);
+            } else {
+                return false;
+            };
+        } else if (equal(car(x), car(y))) {
+            return equal(cdr(x), cdr(y));
+        } else {
+            return false;
+        };
+    };
+
+    assoc = function (x, scope) {
+        if (equal(car(car(scope)), x)) {
+            return car(scope);
+        } else {
+            return assoc(x, cdr(scope));
+        };
+    };
+
+    pairlis = function (x, y, scope) {
+        if (Null(x)) {
+            return scope;
+        } else {
+            return cons(cons(car(x), car(y)), pairlis(cdr(x), cdr(y), scope));
+        };
+    };
+
+    evcon = function (cond, scope) {
+        if (Eval(car(car(cond)), scope)) {
+            return Eval(car(cdr(car(cond))), scope);
+        } else {
+            return evcon(cdr(cond), scope);
+        };
+    };
+
+    evlis = function (m, scope) {
+        if (Null(m)) {
             return false;
         } else {
-            var location = VariableSearcher(symbol, environment);
-
-            if (location !== false) {
-                return location[symbol];
-            };
+            return cons(Eval(car(m), scope), evlis(cdr(m), scope));
         };
     };
 
-    FunctionCall = {
-        'atom': function (Arguments) {
-            return (Array.isArray(Arguments[0]) === false || Arguments[0] === []) ? true : false;
-        },
-
-        '==': function (Arguments, environment) {
-            if (Array.isArray(Arguments[0]) || Array.isArray(Arguments[1])) {
-                return false;
-            } else if (Arguments[0] === Arguments[1]) {
-                return (Arguments[2] !== undefined) ? this['=='](Arguments.slice(1), environment) : true;
+    apply = function (fn, args, scope) {
+        if (atom(fn)) {
+            if (eq(fn, 'car')) {
+                return car(car(args));
+            } else if (eq(fn, 'cdr')) {
+                return cdr(car(args));
+            } else if (eq(fn, 'cons')) {
+                return cons(car(args), car(cdr(args)));
+            } else if (eq(fn, 'atom')) {
+                return atom(car(args));
+            } else if (eq(fn, 'eq')) {
+                return eq(car(args), car(cdr(args)));
             } else {
-                return false;
+                return apply(Eval(fn, scope), args, scope);
             };
-        },
-
-        'car': function (Arguments) {
-            return (Arguments.length === 1) ? false : Arguments.slice(0, 1)[0];
-        },
-
-        'cdr': function (Arguments) {
-            if (Arguments.length === 1) {
-                return false;
-            } else if (Arguments.length === 2) {
-                return Arguments.slice(1)[0];
-            } else {
-                return Arguments.slice(1);
-            };
-        },
-
-        'cons': function (Arguments) {
-            for (i = 0, max = Arguments[1].length; i < max; i += 1) {
-                Arguments[0].push(Arguments[1][i]);
-            };
-
-            return Arguments[0];
-        }
-    };
-
-    Macro = function (macroName, Arguments) {
-        macroTable[macroName] = function () {
-            for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                if (Arguments[0].indexOf('body') !== -1) {
-                    if (Arguments[0][i] === 'body') {
-                        var exc = Array.prototype.slice.call(arguments, i, i + arguments.length - max + 1);
-                    } else {
-                        var exc = arguments[(i < Arguments[0].indexOf('body')) ? i : i + arguments.length - max];
-                    };
-                } else {
-                    var exc = arguments[i];
-                };
-
-                SymbolExchanger(Arguments[1], Arguments[0][i], exc);
-            };
-
-            return Arguments[1];
+        } else if (eq(car(fn), 'lambda')) {
+            return Eval(car(cdr(cdr(form))), pairlis(car(cdr(fn)), args, scope));
+        } else if (eq(car(fn), 'var')) {
+            return apply(car(cdr(cdr(form))), args, cons(cons(car(cdr(fn)), car(cdr(cdr(fn)))), scope));
         };
     };
 
-    CoreFunction = {
-        '+': function (Arguments) {
-            if (Arguments.length === 0) {
-                return 0;
-            } else if (Arguments.length === 1) {
-                return Arguments[0];
+    Eval = function (form, scope) {
+        if (Null(form)) {
+            return false;
+        } else if (primitive(form)) {
+            return form;
+        } else if (atom(form)) {
+            return cdr(assoc(form, scope));
+        } else if (atom(car(form))) {
+            if (eq(car(form), 'quote')) {
+                return car(cdr(form));
+            } else if (eq(car(form), 'cond')) {
+                return evcon(cdr(form), scope);
             } else {
-                return Arguments.shift() + this['+'](Arguments);
+                return apply(car(form), evlis(cdr(form), scope), scope);
             };
-        },
-
-        '-': function (Arguments) {
-            if (Arguments.length === 0) {
-                return 0;
-            } else if (Arguments.length === 1) {
-                return -Arguments[0];
-            } else {
-                return Arguments.shift() - this['+'](Arguments);
-            };
-        },
-
-        '*': function (Arguments) {
-            if (Arguments.length === 0) {
-                return 1;
-            } else if (Arguments.length === 1) {
-                return Arguments[0];
-            } else {
-                return Arguments.shift() * this['*'](Arguments);
-            };
-        },
-
-        '/': function (Arguments) {
-            if (Arguments.length === 0) {
-                return 1;
-            } else if (Arguments.length === 1) {
-                return 1 / Arguments[0];
-            } else {
-                return Arguments.shift() / this['*'](Arguments);
-            };
-        },
-
-        '%': function (Arguments) {
-            return Arguments[0] % Arguments[1];
-        },
-
-        '<': function (Arguments) {
-            if (Arguments.length > 2) {
-                if (Arguments[0] < Arguments[1]) {
-                    return this['<'](Arguments.slice(1));
-                } else {
-                    return false;
-                };
-            } else {
-                return Arguments[0] < Arguments[1];
-            };
-        },
-
-        '>': function (Arguments) {
-            if (Arguments.length > 2) {
-                if (Arguments[0] > Arguments[1]) {
-                    return this['>'](Arguments.slice(1));
-                } else {
-                    return false;
-                };
-            } else {
-                return Arguments[0] > Arguments[1];
-            };
-        },
-
-        'dlt': function (Arguments) {
-            delete env[Arguments[0]];
-        },
-
-        'tpof': function (Arguments) {
-            return (Array.isArray(Arguments[0])) ? 'array' : typeof Arguments[0];
-        },
-
-        'rtn': function (Arguments) {
-            return (Arguments !== []) ? Arguments.unshift('rtn') : 'rtn';
-        }
-    };
-
-    Compiler = function (parseTree) {
-        var Evaluate, Apply, Special;
-
-        Evaluate = function (Expression, environment) {
-            if (!Array.isArray(Expression)) {
-                return Primitive(Expression, environment);
-            } else {
-                if (core.indexOf(Expression[0]) !== -1 || Expression[0] === 'macro' || Expression[0] in macroTable || Expression[0] in globalEnv) {
-                    return Apply(Expression[0], Expression.slice(1), environment);
-                } else if (/\./.test(Expression[0]) || Array.isArray(Expression[0])) {
-                    if (/\./.test(Expression[0])) {
-                        Expression[0] = Expression[0].split('.');
-                    };
-
-                    return Apply(Expression[0], Expression.slice(1), environment);
-                };
-            };
+        } else {
+            return apply(car(form), evlis(cdr(form), scope), scope);
         };
-
-        Apply = function (Procedure, Arguments, environment) {
-            if (Procedure === 'macro') {
-                return Macro(Arguments.shift(), Arguments);
-            } else if (Procedure in macroTable) {
-                return Evaluate(macroTable[Procedure].apply(this, Arguments), environment);
-            } else if (Procedure in Special) {
-                return Special[Procedure](Arguments, environment);
-            } else {
-                for (var i = 0, max = Arguments.length; i < max; i += 1) {
-                    if (Arguments[i][0] === 'quote') {
-                        Arguments = Evaluate(Arguments[i], environment);
-                    } else {
-                        Arguments[i] = Evaluate(Arguments[i], environment);
-                    };
-                };
-
-                if (Array.isArray(Procedure)) {
-                    if (Procedure[0] in global) {
-                        var call = global;
-                    };
-
-                    for (var i = 0, max = Procedure.length; i < max; i += 1) {
-                        call = call[Procedure[i]];
-                    };
-
-                    call.apply(this, Arguments);
-                } else {
-                    if (Procedure in FunctionCall) {
-                        return FunctionCall[Procedure](Arguments, environment);
-                    } else if (Procedure in CoreFunction) {
-                        return CoreFunction[Procedure](Arguments, environment);
-                    } else if (Procedure in globalEnv) {
-                        return globalEnv[Procedure](Arguments, environment);
-                    };
-                };
-            };
-        };
-
-        Special = {
-            'quote': function (Arguments) {
-                return (Arguments.length === 1) ? Arguments[0] : Arguments;
-            },
-
-            '?': function (Arguments, environment) {
-                if (Arguments[1] === undefined) {
-                    return (Arguments[0] === []) ? false : Evaluate(Arguments[0]);
-                } else if (Evaluate(Arguments[0][0], environment)) {
-                    return Evaluate(Arguments[0][1], environment);
-                } else {
-                    return this['?'](Arguments.slice(1), environment);
-                };
-            },
-
-            'var': function (Arguments, environment) {
-                if (Array.isArray(Arguments[0])) {
-                    for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                        this['var']([Arguments[0][i], Arguments[1][i]], environment);
-                    };
-                } else {
-                    environment[Arguments[0]] = Evaluate(Arguments[1], environment);
-
-                    return Arguments[0];
-                };
-            },
-
-            '=': function (Arguments, environment) {
-                if (Array.isArray(Arguments[0])) {
-                    for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                        this['=']([Arguments[0][i], Arguments[1][i]], environment);
-                    };
-                } else {
-                    var targetEnvironment = VariableSearcher(Arguments[0], environment);
-
-                    if (targetEnvironment !== false) {
-                        targetEnvironment[Arguments[0]] = Evaluate(Arguments[1], environment);
-                    } else {
-                        return false;
-                    };
-                };
-            },
-
-            'fct': function (Arguments, environment) {
-                var lambda = function () {
-                    environment['subEnvironment'] = { 'superEnvironment': environment };
-
-                    for (var i = 0, max = Arguments[0].length; i < max; i += 1) {
-                        Arguments[1] = SymbolExchanger(Arguments[1], Arguments[0][i], arguments[0][i]);
-                    };
-
-                    var result = Evaluate(Arguments[1], environment['subEnvironment']);
-
-                    delete environment['subEnvironment'];
-
-                    return result;
-                };
-
-                return (Arguments[2]) ? lambda.apply(this, Arguments[2]) : lambda;
-            },
-
-            'begin': function (Arguments, environment) {
-                for (var i = 0, max = Arguments.length; i < max; i += 1) {
-                    if (i === max - 1) {
-                        return Evaluate(Arguments[i], environment);
-                    } else {
-                        var result = Evaluate(Arguments[i], environment);
-                        
-                        if (Arguments[i][0] === 'rtn') {
-                            return result;
-                        };
-                    };
-                };
-            },
-
-            'unquote': function (Arguments, environment) {
-                return Evaluate(Evaluate(Arguments[0], environment), environment);
-            },
-
-            'ary': function (Arguments, environment) {
-                var array = [];
-
-                for (var i = 0, max = Arguments.length; i < max; i += 1) {
-                    array.push(Evaluate(Arguments[i], environment));
-                };
-
-                return array;
-            },
-
-            'obj': function (Arguments, env) {
-                var object = {};
-
-                for (var i = 0, max = Arguments.length; i < max; i += 1) {
-                    this['var'](Arguments[i], object);
-                };
-
-                return object;
-            }
-        };
-
-        return function () {
-            var std = Preprocessor(fs.readFileSync('./std.hrn', 'utf8').slice(1));
-            
-            for (var i = 0, imax = std.length; i < imax; i += 1) {
-                Evaluate(std[i], globalEnvironment);
-                delete globalEnvironment['subEnvironment'];
-            };
-            
-            for (var j = 0, jmax = parseTree.length; j < jmax; j += 1) {
-                Evaluate(parseTree[j], globalEnvironment);
-                delete globalEnvironment['subEnvironment'];
-            };
-            console.log(globalEnvironment);
-        }();
     };
 }());
 
 Heroin = function (path) {
-    var data = fs.readFileSync(path, 'utf8').slice(1);
+    var data = fs.readFileSync(path, 'utf8'),
+        nextSentence = Parser(Scanner(Reader(data))).nextSentence,
+        sentence;
 
-    //console.log(Preprocessor(data)[0]);      // to test the parser
-    Compiler(Preprocessor(data));
+    return function () {
+        while (true) {
+            sentence = nextSentence();
+
+            if (sentence === null) {
+                console.log('end');
+                break;
+            } else {
+                console.log(Interpreter(sentence, global));
+            };
+        };
+    };
 };
-
-Heroin('./test.hrn');
 
 module.exports = Heroin;
