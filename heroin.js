@@ -312,7 +312,7 @@
 
 			sentence = parse();
 
-			return lookAhead('text') === '(' ? [sentence, [parse(), false]] : sentence;
+			return lookAhead('text') === '(' ? [sentence, parse()] : sentence;
 		};
 	};
 }());
