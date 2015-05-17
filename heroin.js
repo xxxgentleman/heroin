@@ -107,6 +107,11 @@
 
 							while (character !== '\r' && character !== '\n' && character !== '-1') {
 								bufferString += character;
+
+								if (character === '#') {
+									break;
+								};
+
 								character = nextCharacter();
 							};
 
@@ -165,7 +170,6 @@
 	Parser = function (scanner) {
 		var nextToken = scanner.nextToken,
 			consumed = true,
-            pnb = ['(', '{'],
 			advance, lookAhead, parse, parseCond, currentToken, aheadToken, currentType, currentText;
 
 		advance = function () {
@@ -215,16 +219,17 @@
 								advance();
 
 								if (lookAhead('text') === ')') {
+									advance();
 								    list.push([]);
 
 								    return list;
 								};
 
-								list.push(pnb.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
+								list.push([parse()]);
 								flag = list[1];
 
 								continue;
-							case ',': case ')': case ']': case '->': case '^':
+							case ',': case ';': case '^': case ')': case ']': case '}': case '->':
 								return currentText;
 							default:
 						};
@@ -238,19 +243,21 @@
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
 							    advance();
-							    list = currentText === '{' ? ['prog'] : [];
+								
+								if (lookAhead('text') === ')') {
+									advance();
 
-							    if (lookAhead('text') === ')') {
-							        return list;
-							    };
+									return [];
+								} else {
+									list = currentText === '{' ? ['prog', [parse()]] : [parse()];
+								};
 
-							    list.push(pnb.indexOf(lookAhead('text')) === -1 ? [parse()] : parse());
-								flag = list[1] ? list[1] : list[0];
+								flag = list[1] ? list[1] : list;
 
 								continue;
 							case ',': case '^': case ';':
 								advance();
-								flag.push((pnb.indexOf(lookAhead('text')) === -1 && currentText !== '^') ? [parse()] : parse());
+								flag.push(currentText !== '^' ? parse() : [parse()]);
 								flag = flag[1];
 
 								continue;
@@ -262,13 +269,11 @@
 							case ')': case ']': case '}':
 								advance();
 
-								if (currentText === ']' && !list[0][1] && !isArray(list[0][0])) {
-								    list = list[0];
-								} else if (flag[0] && !flag[1]) {
+								if (flag[0] && !flag[1]) {
 								    flag[1] = false;
 								};
 
-								return currentText === ']' ? ['quote', [list[0], false]] : list;
+								return currentText === ']' ? ['quote', [list, false]] : list;
 							default:
 						};
 					default:
@@ -298,18 +303,16 @@
 			};
 		};
 
-		return {
-			nextSentence: function () {
-				var sentence = parse();
+		return function () {
+			var sentence;
 
-				if (lookAhead('type') === 'separator' && lookAhead('text') === ';') {
-					advance();
-				} else {
-					return ['Please use a semicolon to end the sentence.'];
-				};
+			if (lookAhead('type') === 'separator' && lookAhead('text') === ';') {
+				advance();
+			};
 
-				return sentence;
-			}
+			sentence = parse();
+
+			return lookAhead('text') === '(' ? [sentence, [parse(), false]] : sentence;
 		};
 	};
 }());
@@ -443,7 +446,7 @@
 
 Heroin = function (path) {
     var data = fs.readFileSync(path, 'utf8'),
-        nextSentence = Parser(Scanner(Reader(data))).nextSentence,
+        nextSentence = Parser(Scanner(Reader(data))),
         sentence;
 
     return function () {
@@ -454,7 +457,7 @@ Heroin = function (path) {
                 console.log('end');
                 break;
             } else {
-                console.log(Interpreter(sentence, global));
+                console.log(Eval(sentence, global));
             };
         };
     };
