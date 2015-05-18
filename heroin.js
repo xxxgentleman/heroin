@@ -1,5 +1,5 @@
 ﻿var fs = require('fs'),
-    global = [],
+    global = [], macro = [],
     Reader, Scanner, Parser, Eval, Heroin;
 
 (function () {
@@ -60,7 +60,7 @@
 							var character = nextCharacter();
 
 							switch (character) {
-								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':
+								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}': case '<': case '>':
 									return { type: 'separator', text: character };
 								case '\r': case '\n':
 									currentLine += 1;
@@ -229,7 +229,7 @@
 								flag = list[1];
 
 								continue;
-							case ',': case ';': case '^': case ')': case ']': case '}': case '->':
+							case ',': case ';': case '^': case ')': case ']': case '}': case '>': case '->':
 								return currentText;
 							default:
 						};
@@ -241,7 +241,7 @@
 						return typeof currentText === 'boolean' ? ['quote', [currentText, false]] : currentText;
 					case 'separator':
 						switch (lookAhead('text')) {
-							case '(': case '[': case '{':
+							case '(': case '[': case '{': case '<':
 							    advance();
 								
 								if (lookAhead('text') === ')') {
@@ -266,14 +266,14 @@
 								list = parseCond(flag);
 
 								continue;
-							case ')': case ']': case '}':
+							case ')': case ']': case '}': case '>':
 								advance();
 
 								if (flag[0] && !flag[1]) {
 								    flag[1] = false;
 								};
 
-								return currentText === ']' ? ['quote', [list, false]] : list;
+								return currentText === ']' ? ['quote', [list, false]] : currentText === '>' ? ['unquote', [list, false]] : list;
 							default:
 						};
 					default:
@@ -322,11 +322,11 @@
         car, cdr, cons, atom, eq, evcon, apply, Null, primitive, assoc, equal, evlis, pairlis;
 
     car = function (x) {
-        return isArray(x) ? x[0] : undefined;
+        return isArray(x) ? x[0] : false;
     };
 
     cdr = function (x) {
-        return isArray(x) ? x[1] : undefined;
+        return isArray(x) ? x[1] : false;
     };
 
     cons = function (x, y) {
@@ -342,7 +342,11 @@
     };
 
     Null = function (x) {
-        return x === false;
+        if (isArray(x)) {
+			return x.length === 0;
+		} else {
+			return x === false;
+		};
     };
 
     primitive = function (form) {
