@@ -3,8 +3,6 @@
     Reader, Scanner, Parser, Eval, Heroin;
 
 (function () {
-    var Reader, States, Scanner, Parser;
-
     Reader = function (string) {
         var data = string,
             currentPosition = 0,
