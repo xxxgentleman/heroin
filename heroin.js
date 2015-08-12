@@ -1,6 +1,6 @@
 ﻿var fs = require('fs'),
-    global = [], macro = [],
-    Reader, Scanner, Parser, Eval, Heroin;
+    global = false,
+    Reader, Scanner, Parser, Interpreter, Heroin;
 
 (function () {
     Reader = function (string) {
@@ -58,7 +58,7 @@
 							var character = nextCharacter();
 
 							switch (character) {
-								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}': case '<': case '>':
+								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':
 									return { type: 'separator', text: character };
 								case '\r': case '\n':
 									currentLine += 1;
@@ -227,7 +227,7 @@
 								flag = list[1];
 
 								continue;
-							case ',': case ';': case '^': case ')': case ']': case '}': case '>': case '->':
+							case ',': case ';': case '^': case ')': case ']': case '}': case '->':
 								return currentText;
 							default:
 						};
@@ -239,7 +239,7 @@
 						return typeof currentText === 'boolean' ? ['quote', [currentText, false]] : currentText;
 					case 'separator':
 						switch (lookAhead('text')) {
-							case '(': case '[': case '{': case '<':
+							case '(': case '[': case '{':
 							    advance();
 								
 								if (lookAhead('text') === ')') {
@@ -264,14 +264,18 @@
 								list = parseCond(flag);
 
 								continue;
-							case ')': case ']': case '}': case '>':
+							case ')': case ']': case '}':
 								advance();
 
 								if (flag[0] && !flag[1]) {
 								    flag[1] = false;
 								};
 
-								return currentText === ']' ? ['quote', [list, false]] : currentText === '>' ? ['unquote', [list, false]] : list;
+								if (lookAhead('text') === '(') {
+                                	return [list, parse()];
+                            	} else {
+                                	return currentText === ']' ? ['quote', [list, false]] : list;
+                            	};
 							default:
 						};
 					default:
@@ -310,14 +314,14 @@
 
 			sentence = parse();
 
-			return lookAhead('text') === '(' ? [sentence, parse()] : sentence;
+			return sentence;
 		};
 	};
 }());
 
 (function () {
     var isArray = Array.isArray,
-        car, cdr, cons, atom, eq, evcon, apply, Null, primitive, assoc, equal, evlis, pairlis;
+        car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis;
 
     car = function (x) {
         return isArray(x) ? x[0] : false;
@@ -332,7 +336,7 @@
     };
 
     atom = function (x) {
-        return isArray(x) ? (x.length === 0 ? true : false) : true;
+        return isArray(x) ? (x.length === 0) : true;
     };
 
     eq = function (x, y) {
@@ -340,11 +344,7 @@
     };
 
     Null = function (x) {
-        if (isArray(x)) {
-			return x.length === 0;
-		} else {
-			return x === false;
-		};
+		return isArray(x) ? (x.length === 0) : (x === false);
     };
 
     primitive = function (form) {
@@ -354,6 +354,14 @@
             return true;
         } else {
             return typeofForm === 'number' || typeofForm === 'boolean';
+        };
+    };
+	
+	assoc = function (x, scope) {
+        if (equal(car(car(scope)), x)) {
+            return car(scope);
+        } else {
+            return assoc(x, cdr(scope));
         };
     };
 
@@ -371,14 +379,6 @@
         };
     };
 
-    assoc = function (x, scope) {
-        if (equal(car(car(scope)), x)) {
-            return car(scope);
-        } else {
-            return assoc(x, cdr(scope));
-        };
-    };
-
     pairlis = function (x, y, scope) {
         if (Null(x)) {
             return scope;
@@ -387,68 +387,94 @@
         };
     };
 
-    evcon = function (cond, scope) {
-        if (Eval(car(car(cond)), scope)) {
-            return Eval(car(cdr(car(cond))), scope);
-        } else {
-            return evcon(cdr(cond), scope);
-        };
-    };
+	Interpreter = function (metaScope) {
+    	var global = metaScope,
+        	Eval, quote, evcon, apply, evlis, Var;
 
-    evlis = function (m, scope) {
-        if (Null(m)) {
-            return false;
-        } else {
-            return cons(Eval(car(m), scope), evlis(cdr(m), scope));
-        };
-    };
+    	Eval = function (form, scope) {
+        	if (Null(form)) {
+            	return false;
+        	} else if (primitive(form)) {
+            	return form;
+        	} else if (atom(form)) {
+            	return cdr(assoc(form, scope));
+        	} else if (atom(car(form))) {
+            	if (eq(car(form), 'quote')) {
+                	return quote(form);
+            	} else if (eq(car(form), 'cond')) {
+                	return evcon(cdr(form), scope);
+            	} else if (eq(car(form), 'var')) {
+                	return Var(form);
+            	} else if (eq(car(form), 'lambda')) {
+                	return form;
+            	} else {
+                	return apply(car(form), evlis(cdr(form), scope), scope);
+            	};
+        	} else {
+            	return apply(car(form), evlis(cdr(form), scope), scope);
+        	};
+    	};
 
-    apply = function (fn, args, scope) {
-        if (atom(fn)) {
-            if (eq(fn, 'car')) {
-                return car(car(args));
-            } else if (eq(fn, 'cdr')) {
-                return cdr(car(args));
-            } else if (eq(fn, 'cons')) {
-                return cons(car(args), car(cdr(args)));
-            } else if (eq(fn, 'atom')) {
-                return atom(car(args));
-            } else if (eq(fn, 'eq')) {
-                return eq(car(args), car(cdr(args)));
-            } else {
-                return apply(Eval(fn, scope), args, scope);
-            };
-        } else if (eq(car(fn), 'lambda')) {
-            return Eval(car(cdr(cdr(form))), pairlis(car(cdr(fn)), args, scope));
-        } else if (eq(car(fn), 'var')) {
-            return apply(car(cdr(cdr(form))), args, cons(cons(car(cdr(fn)), car(cdr(cdr(fn)))), scope));
-        };
-    };
+    	quote = function (x) {
+        	return car(cdr(x));
+    	};
 
-    Eval = function (form, scope) {
-        if (Null(form)) {
-            return false;
-        } else if (primitive(form)) {
-            return form;
-        } else if (atom(form)) {
-            return cdr(assoc(form, scope));
-        } else if (atom(car(form))) {
-            if (eq(car(form), 'quote')) {
-                return car(cdr(form));
-            } else if (eq(car(form), 'cond')) {
-                return evcon(cdr(form), scope);
-            } else {
-                return apply(car(form), evlis(cdr(form), scope), scope);
-            };
-        } else {
-            return apply(car(form), evlis(cdr(form), scope), scope);
-        };
-    };
+    	evcon = function (cond, scope) {
+        	if (Eval(car(car(cond)), scope)) {
+            	return Eval(car(cdr(car(cond))), scope);
+        	} else {
+            	return evcon(cdr(cond), scope);
+        	};
+    	};
+
+    	apply = function (fn, args, scope) {
+        	if (atom(fn)) {
+            	if (eq(fn, 'car')) {
+                	return car(car(args));
+            	} else if (eq(fn, 'cdr')) {
+                	return cdr(car(args));
+            	} else if (eq(fn, 'cons')) {
+                	return cons(car(args), car(cdr(args)));
+            	} else if (eq(fn, 'atom')) {
+                	return atom(car(args));
+            	} else if (eq(fn, 'eq')) {
+                	return eq(car(args), car(cdr(args)));
+            	} else if (eq(fn, 'var')) {
+                	return Var(fn, scope);
+            	} else {
+                	return apply(Eval(fn, scope), args, scope);
+            	};
+        	} else if (eq(car(fn), 'lambda')) {
+            	return Eval(car(cdr(cdr(fn))), pairlis(car(cdr(fn)), args, scope));
+        	} else if (eq(car(fn), 'var')) {
+            	return apply(car(cdr(cdr(fn))), args, Var(fn, scope));
+        	};
+    	};
+
+    	evlis = function (form, scope) {
+        	if (Null(form)) {
+            	return false;
+        	} else {
+            	return cons(Eval(car(form), scope), evlis(cdr(form), scope));
+        	};
+    	};
+
+    	Var = function (form) {
+        	global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))))), global);
+
+        	return global;
+    	};
+
+    	return function (sentence) {
+        	return Eval(sentence, global);
+    	};
+	};
 }());
 
 Heroin = function (path) {
     var data = fs.readFileSync(path, 'utf8'),
         nextSentence = Parser(Scanner(Reader(data))),
+		evaluator = Interpreter(global),
         sentence;
 
     return function () {
@@ -459,7 +485,7 @@ Heroin = function (path) {
                 console.log('end');
                 break;
             } else {
-                console.log(Eval(sentence, global));
+                console.log(evaluator(sentence));
             };
         };
     };
