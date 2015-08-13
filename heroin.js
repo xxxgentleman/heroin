@@ -1,45 +1,45 @@
 ﻿var fs = require('fs'),
-    global = false,
-    Reader, Scanner, Parser, Interpreter, Heroin;
+	global = false,
+	Reader, Scanner, Parser, Interpreter, Heroin;
 
 (function () {
-    Reader = function (string) {
-        var data = string,
-            currentPosition = 0,
-            dataLength = data.length;
+	Reader = function (string) {
+		var data = string,
+			currentPosition = 0,
+			dataLength = data.length;
 
-        return {
-            nextCharacter: function () {
-                if (currentPosition >= dataLength) {
-                    return '-1';
-                };
+		return {
+			nextCharacter: function () {
+				if (currentPosition >= dataLength) {
+					return '-1';
+				};
 
-                return data.charAt(currentPosition++);
-            },
+				return data.charAt(currentPosition++);
+			},
 
-            retract: function () {
-                currentPosition -= 1;
+			retract: function () {
+				currentPosition -= 1;
 
-                if (currentPosition >= dataLength) {
-                    return;
-                };
+				if (currentPosition >= dataLength) {
+					return;
+				};
 
-                if (currentPosition < 0) {
-                    currentPosition = 0;
-                };
-            }
-        };
-    };
+				if (currentPosition < 0) {
+					currentPosition = 0;
+				};
+			}
+		};
+	};
 }());
 
 (function () {
-    var States = {};
+	var States = {};
 
-    States.START_STATE = 0;
-    States.STRING_STATE = States.START_STATE + 1;
-    States.COMMENT_STATE = States.STRING_STATE + 1;
-    States.NUMBER_STATE = States.COMMENT_STATE + 1;
-    States.IDENTIFIER_STATE = States.NUMBER_STATE + 1;
+	States.START_STATE = 0;
+	States.STRING_STATE = States.START_STATE + 1;
+	States.COMMENT_STATE = States.STRING_STATE + 1;
+	States.NUMBER_STATE = States.COMMENT_STATE + 1;
+	States.IDENTIFIER_STATE = States.NUMBER_STATE + 1;
 
 	Scanner = function (reader) {
 		var nextCharacter = reader.nextCharacter,
@@ -89,7 +89,7 @@
 
 							break;
 						case States.STRING_STATE:
-							var character = nextCharacter();
+							character = nextCharacter();
 
 							while (character !== "'") {
 								bufferString += character;
@@ -101,7 +101,7 @@
 
 							return { type: 'value', text: bufferString };
 						case States.COMMENT_STATE:
-							var character = nextCharacter();
+							character = nextCharacter();
 
 							while (character !== '\r' && character !== '\n' && character !== '-1') {
 								bufferString += character;
@@ -117,7 +117,7 @@
 
 							return { type: 'comment', text: bufferString };
 						case States.NUMBER_STATE:
-							var character = nextCharacter();
+							character = nextCharacter();
 
 							while (/[\d\.]/.test(character)) {
 								if (character === '.') {
@@ -137,7 +137,7 @@
 
 							return { type: 'value', text: parseFloat(bufferString) };
 						case States.IDENTIFIER_STATE:
-							var character = nextCharacter();
+							character = nextCharacter();
 
 							while (/[^\,\;\^\(\)\[\]\{\}\"\'\#\r\n\s]/.test(character)) {
 								bufferString += character;
@@ -241,7 +241,7 @@
 						switch (lookAhead('text')) {
 							case '(': case '[': case '{':
 							    advance();
-								
+
 								if (lookAhead('text') === ')') {
 									advance();
 
@@ -272,10 +272,10 @@
 								};
 
 								if (lookAhead('text') === '(') {
-                                	return [list, parse()];
-                            	} else {
-                                	return currentText === ']' ? ['quote', [list, false]] : list;
-                            	};
+									return [list, parse()];
+								} else {
+									return currentText === ']' ? ['quote', [list, false]] : list;
+								};
 							default:
 						};
 					default:
@@ -320,175 +320,175 @@
 }());
 
 (function () {
-    var isArray = Array.isArray,
-        car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis;
+	var isArray = Array.isArray,
+		car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis;
 
-    car = function (x) {
-        return isArray(x) ? x[0] : false;
-    };
+	car = function (x) {
+		return isArray(x) ? x[0] : false;
+	};
 
-    cdr = function (x) {
-        return isArray(x) ? x[1] : false;
-    };
+	cdr = function (x) {
+		return isArray(x) ? x[1] : false;
+	};
 
-    cons = function (x, y) {
-        return [x, y];
-    };
+	cons = function (x, y) {
+		return [x, y];
+	};
 
-    atom = function (x) {
-        return isArray(x) ? (x.length === 0) : true;
-    };
+	atom = function (x) {
+		return isArray(x) ? (x.length === 0) : true;
+	};
 
-    eq = function (x, y) {
-        return x === y;
-    };
+	eq = function (x, y) {
+		return x === y;
+	};
 
-    Null = function (x) {
+	Null = function (x) {
 		return isArray(x) ? (x.length === 0) : (x === false);
-    };
+	};
 
-    primitive = function (form) {
-        var typeofForm = typeof form;
+	primitive = function (form) {
+		var typeofForm = typeof form;
 
-        if (typeofForm === 'string' && form[0] === "'") {
-            return true;
-        } else {
-            return typeofForm === 'number' || typeofForm === 'boolean';
-        };
-    };
-	
+		if (typeofForm === 'string' && form[0] === "'") {
+			return true;
+		} else {
+			return typeofForm === 'number' || typeofForm === 'boolean';
+		};
+	};
+
 	assoc = function (x, scope) {
-        if (equal(car(car(scope)), x)) {
-            return car(scope);
-        } else {
-            return assoc(x, cdr(scope));
-        };
-    };
+		if (equal(car(car(scope)), x)) {
+			return car(scope);
+		} else {
+			return assoc(x, cdr(scope));
+		};
+	};
 
-    equal = function (x, y) {
-        if (atom(x)) {
-            if (atom(y)) {
-                return eq(x, y);
-            } else {
-                return false;
-            };
-        } else if (equal(car(x), car(y))) {
-            return equal(cdr(x), cdr(y));
-        } else {
-            return false;
-        };
-    };
+	equal = function (x, y) {
+		if (atom(x)) {
+			if (atom(y)) {
+				return eq(x, y);
+			} else {
+				return false;
+			};
+		} else if (equal(car(x), car(y))) {
+			return equal(cdr(x), cdr(y));
+		} else {
+			return false;
+		};
+	};
 
-    pairlis = function (x, y, scope) {
-        if (Null(x)) {
-            return scope;
-        } else {
-            return cons(cons(car(x), car(y)), pairlis(cdr(x), cdr(y), scope));
-        };
-    };
+	pairlis = function (x, y, scope) {
+		if (Null(x)) {
+			return scope;
+		} else {
+			return cons(cons(car(x), car(y)), pairlis(cdr(x), cdr(y), scope));
+		};
+	};
 
 	Interpreter = function (metaScope) {
-    	var global = metaScope,
-        	Eval, quote, evcon, apply, evlis, Var;
+		var global = metaScope,
+			Eval, quote, evcon, apply, evlis, Var;
 
-    	Eval = function (form, scope) {
-        	if (Null(form)) {
-            	return false;
-        	} else if (primitive(form)) {
-            	return form;
-        	} else if (atom(form)) {
-            	return cdr(assoc(form, scope));
-        	} else if (atom(car(form))) {
-            	if (eq(car(form), 'quote')) {
-                	return quote(form);
-            	} else if (eq(car(form), 'cond')) {
-                	return evcon(cdr(form), scope);
-            	} else if (eq(car(form), 'var')) {
-                	return Var(form);
-            	} else if (eq(car(form), 'lambda')) {
-                	return form;
-            	} else {
-                	return apply(car(form), evlis(cdr(form), scope), scope);
-            	};
-        	} else {
-            	return apply(car(form), evlis(cdr(form), scope), scope);
-        	};
-    	};
+		Eval = function (form, scope) {
+			if (Null(form)) {
+				return false;
+			} else if (primitive(form)) {
+				return form;
+			} else if (atom(form)) {
+				return cdr(assoc(form, scope));
+			} else if (atom(car(form))) {
+				if (eq(car(form), 'quote')) {
+					return quote(form);
+				} else if (eq(car(form), 'cond')) {
+					return evcon(cdr(form), scope);
+				} else if (eq(car(form), 'var')) {
+					return Var(form);
+				} else if (eq(car(form), 'lambda')) {
+					return form;
+				} else {
+					return apply(car(form), evlis(cdr(form), scope), scope);
+				};
+			} else {
+				return apply(car(form), evlis(cdr(form), scope), scope);
+			};
+		};
 
-    	quote = function (x) {
-        	return car(cdr(x));
-    	};
+		quote = function (x) {
+			return car(cdr(x));
+		};
 
-    	evcon = function (cond, scope) {
-        	if (Eval(car(car(cond)), scope)) {
-            	return Eval(car(cdr(car(cond))), scope);
-        	} else {
-            	return evcon(cdr(cond), scope);
-        	};
-    	};
+		evcon = function (cond, scope) {
+			if (Eval(car(car(cond)), scope)) {
+				return Eval(car(cdr(car(cond))), scope);
+			} else {
+				return evcon(cdr(cond), scope);
+			};
+		};
 
-    	apply = function (fn, args, scope) {
-        	if (atom(fn)) {
-            	if (eq(fn, 'car')) {
-                	return car(car(args));
-            	} else if (eq(fn, 'cdr')) {
-                	return cdr(car(args));
-            	} else if (eq(fn, 'cons')) {
-                	return cons(car(args), car(cdr(args)));
-            	} else if (eq(fn, 'atom')) {
-                	return atom(car(args));
-            	} else if (eq(fn, 'eq')) {
-                	return eq(car(args), car(cdr(args)));
-            	} else if (eq(fn, 'var')) {
-                	return Var(fn, scope);
-            	} else {
-                	return apply(Eval(fn, scope), args, scope);
-            	};
-        	} else if (eq(car(fn), 'lambda')) {
-            	return Eval(car(cdr(cdr(fn))), pairlis(car(cdr(fn)), args, scope));
-        	} else if (eq(car(fn), 'var')) {
-            	return apply(car(cdr(cdr(fn))), args, Var(fn, scope));
-        	};
-    	};
+		apply = function (fn, args, scope) {
+			if (atom(fn)) {
+				if (eq(fn, 'car')) {
+					return car(car(args));
+				} else if (eq(fn, 'cdr')) {
+					return cdr(car(args));
+				} else if (eq(fn, 'cons')) {
+					return cons(car(args), car(cdr(args)));
+				} else if (eq(fn, 'atom')) {
+					return atom(car(args));
+				} else if (eq(fn, 'eq')) {
+					return eq(car(args), car(cdr(args)));
+				} else if (eq(fn, 'var')) {
+					return Var(fn, scope);
+				} else {
+					return apply(Eval(fn, scope), args, scope);
+				};
+			} else if (eq(car(fn), 'lambda')) {
+				return Eval(car(cdr(cdr(fn))), pairlis(car(cdr(fn)), args, scope));
+			} else if (eq(car(fn), 'var')) {
+				return apply(car(cdr(cdr(fn))), args, Var(fn, scope));
+			};
+		};
 
-    	evlis = function (form, scope) {
-        	if (Null(form)) {
-            	return false;
-        	} else {
-            	return cons(Eval(car(form), scope), evlis(cdr(form), scope));
-        	};
-    	};
+		evlis = function (form, scope) {
+			if (Null(form)) {
+				return false;
+			} else {
+				return cons(Eval(car(form), scope), evlis(cdr(form), scope));
+			};
+		};
 
-    	Var = function (form) {
-        	global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))))), global);
+		Var = function (form) {
+			global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))))), global);
 
-        	return global;
-    	};
+			return global;
+		};
 
-    	return function (sentence) {
-        	return Eval(sentence, global);
-    	};
+		return function (sentence) {
+			return Eval(sentence, global);
+		};
 	};
 }());
 
 Heroin = function (path) {
-    var data = fs.readFileSync(path, 'utf8'),
-        nextSentence = Parser(Scanner(Reader(data))),
+	var data = fs.readFileSync(path, 'utf8'),
+		nextSentence = Parser(Scanner(Reader(data))),
 		evaluator = Interpreter(global),
-        sentence;
+		sentence;
 
-    return function () {
-        while (true) {
-            sentence = nextSentence();
+	return function () {
+		while (true) {
+			sentence = nextSentence();
 
-            if (sentence === null) {
-                console.log('end');
-                break;
-            } else {
-                console.log(evaluator(sentence));
-            };
-        };
-    };
+			if (sentence === null) {
+				console.log('end');
+				break;
+			} else {
+				console.log(evaluator(sentence));
+			};
+		};
+	};
 };
 
 module.exports = Heroin;
