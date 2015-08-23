@@ -13,7 +13,7 @@ It's just a LISP-like implentation based on node.js.
 
 >	and its special form like cond in LISP and if/else in JavaScript
 
-		(condition1 -> then1, condition2 -> then2, condition3 -> then3);
+		(condition1 -> then1; condition2 -> then2; condition3 -> then3);
 
 ### compare with JavaScript for now
 
@@ -28,7 +28,7 @@ It's just a LISP-like implentation based on node.js.
 	a === b										==(a, b);
 	a < b										<(a, b);
 	a > b										>(a, b);
-	condition ? then : else						(condition -> then, true -> else);
+	condition ? then : else						(condition -> then; true -> else);
 	delete a									dlt(a);
 	var a = b									var(a, b);
 	return a									rtn(a);
@@ -59,12 +59,12 @@ It's just a LISP-like implentation based on node.js.
 	(CDR '(A B))					cdr([A, B]);
 	(EQ A B)						==(A, B);
 	(ATOM A)						atom(A);
-	(COND (P1 E1) (P2 E2))			(P1 -> E1, P2 -> E2);
+	(COND (P1 E1) (P2 E2))			(P1 -> E1; P2 -> E2);
 
 ### special form
 
-	{E1, E2, E3, ..., En};		=>	evluate E1, E2, E3, ..., En; then return the result of En
-	{-(5, 4), +(1, 2)}	=>	return 3
+	{E1; E2; E3; ...; En;};		=>	evluate E1, E2, E3, ..., En; then return the result of En
+	{-(5, 4); +(1, 2)}	=>	return 3
 
 ### How to use heroin
 > step 1. write what you want to try in a file like try.hrn
