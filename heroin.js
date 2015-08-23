@@ -254,9 +254,12 @@
 
 								continue;
 							case ',': case '^': case ';':
-								advance();
-								flag.push(currentText !== '^' ? parse() : [parse()]);
-								flag = flag[1];
+							    advance();
+
+							    if (currentText === ';' && lookAhead('text') === '}') { } else {
+							        flag.push(currentText !== '^' ? parse() : [parse()]);
+							        flag = flag[1];
+							    };
 
 								continue;
 							case '->':
@@ -321,7 +324,7 @@
 
 (function () {
 	var isArray = Array.isArray,
-		car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis;
+		car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis, subst;
 
 	car = function (x) {
 		return isArray(x) ? x[0] : false;
@@ -360,6 +363,8 @@
 	assoc = function (x, scope) {
 		if (equal(car(car(scope)), x)) {
 			return car(scope);
+		} else if (cdr(scope) === false) {
+		    return [x, undefined];
 		} else {
 			return assoc(x, cdr(scope));
 		};
@@ -387,9 +392,19 @@
 		};
 	};
 
+	subst = function (x, y, assoc) {
+	    if (equal(y, assoc)) {
+	        return x;
+	    } else if (atom(assoc)) {
+	        return assoc;
+	    } else {
+	        return cons(subst(x, y, car(assoc)), subst(x, y, cdr(assoc)));
+	    };
+	};
+
 	Interpreter = function (metaScope) {
 		var global = metaScope,
-			Eval, quote, evcon, apply, evlis, Var;
+			Eval, quote, evcon, apply, evlis, Var, progn;
 
 		Eval = function (form, scope) {
 			if (Null(form)) {
@@ -404,9 +419,15 @@
 				} else if (eq(car(form), 'cond')) {
 					return evcon(cdr(form), scope);
 				} else if (eq(car(form), 'var')) {
-					return Var(form);
+					return Var(form, scope);
+				} else if (eq(car(form), '=')) {
+				    global = subst(cons(car(cdr(form)), Eval(car(cdr(cdr(form)))), scope), assoc(car(cdr(form)), scope), scope);
+
+				    return cdr(assoc(car(cdr(form)), global));
 				} else if (eq(car(form), 'lambda')) {
 					return form;
+				} else if (eq(car(form), 'progn')) {
+				    return progn(form, scope);
 				} else {
 					return apply(car(form), evlis(cdr(form), scope), scope);
 				};
@@ -445,7 +466,9 @@
 					return apply(Eval(fn, scope), args, scope);
 				};
 			} else if (eq(car(fn), 'lambda')) {
-				return Eval(car(cdr(cdr(fn))), pairlis(car(cdr(fn)), args, scope));
+			    var innerEval = Interpreter(pairlis(car(cdr(fn)), args, scope));
+
+			    return innerEval(car(cdr(cdr(fn))));
 			} else if (eq(car(fn), 'var')) {
 				return apply(car(cdr(cdr(fn))), args, Var(fn, scope));
 			};
@@ -459,10 +482,20 @@
 			};
 		};
 
-		Var = function (form) {
-			global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))))), global);
+		Var = function (form, scope) {
+			global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))), scope)), global);
 
-			return global;
+			return global[0][1];
+		};
+
+		progn = function (form, scope) {
+		    if (eq(cdr(form), false)) {
+		        return Eval(car(form), scope);
+		    } else {
+		        Eval(car(form), scope);
+
+		        return progn(cdr(form), scope);
+		    };
 		};
 
 		return function (sentence) {
