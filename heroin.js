@@ -1,5 +1,5 @@
 ﻿var fs = require('fs'),
-	global = false,
+	global = [['console', console], false],
 	Reader, Scanner, Parser, Interpreter, Heroin;
 
 (function () {
@@ -14,7 +14,7 @@
 					return '-1';
 				};
 
-				return data.charAt(currentPosition++);
+				return data.charAt(currentPosition ++);
 			},
 
 			retract: function () {
@@ -50,12 +50,12 @@
 
 		return {
 			nextToken: function () {
-				var bufferString = '';
+				var bufferString = '', character;
 
 				while (true) {
 					switch (state) {
 						case States.START_STATE:
-							var character = nextCharacter();
+							character = nextCharacter();
 
 							switch (character) {
 								case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':
@@ -139,9 +139,17 @@
 						case States.IDENTIFIER_STATE:
 							character = nextCharacter();
 
-							while (/[^\,\;\^\(\)\[\]\{\}\"\'\#\r\n\s]/.test(character)) {
-								bufferString += character;
-								character = nextCharacter();
+							if (character !== ']') {
+							    while (/[^\,\;\^\(\)\{\}\"\#\r\n\s]/.test(character)) {
+							        bufferString += character;
+							        character = nextCharacter();
+
+							        if (character === ']') {
+							            if (bufferString.indexOf('[') === -1 || bufferString.match(/\[/g).length === (bufferString.match(/\]/g) === null ? 0 : bufferString.match(/\]/g).length)) {
+							                break;
+							            };
+							        };
+							    };
 							};
 
 							retract();
@@ -277,7 +285,7 @@
 								if (lookAhead('text') === '(') {
 									return [list, parse()];
 								} else {
-									return currentText === ']' ? ['quote', [list, false]] : list;
+								    return currentText === ']' ? (list[1] === false ? ['quote', list] : ['quote', [list, false]]) : list;
 								};
 							default:
 						};
@@ -324,7 +332,7 @@
 
 (function () {
 	var isArray = Array.isArray,
-		car, cdr, cons, atom, eq, Null, primitive, assoc, equal, pairlis, subst;
+		car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, SUBR;
 
 	car = function (x) {
 		return isArray(x) ? x[0] : false;
@@ -350,152 +358,227 @@
 		return isArray(x) ? (x.length === 0) : (x === false);
 	};
 
-	primitive = function (form) {
-		var typeofForm = typeof form;
-
-		if (typeofForm === 'string' && form[0] === "'") {
-			return true;
-		} else {
-			return typeofForm === 'number' || typeofForm === 'boolean';
-		};
-	};
-
-	assoc = function (x, scope) {
-		if (equal(car(car(scope)), x)) {
-			return car(scope);
-		} else if (cdr(scope) === false) {
-		    return [x, undefined];
-		} else {
-			return assoc(x, cdr(scope));
-		};
-	};
-
 	equal = function (x, y) {
-		if (atom(x)) {
-			if (atom(y)) {
-				return eq(x, y);
-			} else {
-				return false;
-			};
-		} else if (equal(car(x), car(y))) {
-			return equal(cdr(x), cdr(y));
-		} else {
-			return false;
-		};
+	    if (atom(x)) {
+	        return atom(y) ? eq(x, y) : false;
+	    } else {
+	        return equal(car(x), car(y)) ? equal(cdr(x), cdr(y)) : false;
+	    };
 	};
 
 	pairlis = function (x, y, scope) {
-		if (Null(x)) {
-			return scope;
-		} else {
-			return cons(cons(car(x), car(y)), pairlis(cdr(x), cdr(y), scope));
-		};
+	    return Null(x) ? scope : cons(cons(car(x), car(y)), pairlis(cdr(x), cdr(y), scope));
 	};
 
 	subst = function (x, y, assoc) {
 	    if (equal(y, assoc)) {
 	        return x;
-	    } else if (atom(assoc)) {
-	        return assoc;
 	    } else {
-	        return cons(subst(x, y, car(assoc)), subst(x, y, cdr(assoc)));
+	        return atom(assoc) ? assoc : cons(subst(x, y, car(assoc)), subst(x, y, cdr(assoc)));
 	    };
 	};
 
+	sublis = function (assoc, y) {
+	    return atom(y) ? subtwo(assoc, y) : cons(sublis(assoc, car(y)), sublis(assoc, cdr(y)));
+	};
+
+	subtwo = function (assoc, z) {
+	    if (Null(assoc)) {
+	        return z;
+	    } else {
+	        return eq(car(car(assoc)), z) ? cdr(car(assoc)) : subtwo(cdr(assoc), z);
+	    };
+	};
+
+	assoc = function (x, scope) {
+	    if (equal(car(car(scope)), x)) {
+	        return car(scope);
+	    } else {
+	        return Null(cdr(scope)) ? [x, undefined] : assoc(x, cdr(scope));
+	    };
+	};
+
+	primitive = function (form) {
+		var typeofForm = typeof form;
+
+		return (typeofForm === 'string' && form[0] === "'") ? true : (typeofForm === 'number' || typeofForm === 'boolean');
+	};
+
+	toPath = function (label, methods) {
+	    var length = methods.length,
+            path = label,
+            i = 0;
+
+	    while (i < length) {
+	        path = path[methods[i]];
+	        i += 1;
+	    };
+
+	    return path;
+	};
+
+	SUBR = function () {
+	    var add, subtract, multiply, divide, modulo;
+
+	    add = function (form, scope) {
+	        return Null(cdr(form)) ? car(form) : (car(form) + add(cdr(form), scope));
+	    };
+
+	    subtract = function (form, scope) {
+	        return Null(cdr(form)) ? -car(form) : (car(form) - add(cdr(form), scope));
+	    };
+
+	    multiply = function (form, scope) {
+	        return Null(cdr(form)) ? car(form) : (car(form) * multiply(cdr(form), scope));
+	    };
+
+	    divide = function (form, scope) {
+	        return Null(cdr(form)) ? (1 / car(form)) : (car(form) / multiply(cdr(form), scope));
+	    };
+
+	    modulo = function (form, scope) {
+	        return car(form) % car(cdr(form));
+	    };
+
+	    return { '+': add, '-': subtract, '*': multiply, '/': divide, '%': modulo };
+	};
+
 	Interpreter = function (metaScope) {
-		var global = metaScope,
-			Eval, quote, evcon, apply, evlis, Var, progn;
+	    var global = metaScope,
+            Arithmetic = SUBR();
+			Eval, quote, evcon, assign, object, progn, remove, apply, evlis, array;
 
 		Eval = function (form, scope) {
-			if (Null(form)) {
-				return false;
-			} else if (primitive(form)) {
-				return form;
-			} else if (atom(form)) {
-				return cdr(assoc(form, scope));
-			} else if (atom(car(form))) {
-				if (eq(car(form), 'quote')) {
-					return quote(form);
-				} else if (eq(car(form), 'cond')) {
-					return evcon(cdr(form), scope);
-				} else if (eq(car(form), 'var')) {
-					return Var(form, scope);
-				} else if (eq(car(form), '=')) {
-				    global = subst(cons(car(cdr(form)), Eval(car(cdr(cdr(form)))), scope), assoc(car(cdr(form)), scope), scope);
+		    if (Null(form)) {
+		        return false;
+		    } else if (primitive(form)) {
+		        return (typeof form === 'string' && form[0] === "'") ? form.slice(1, -1) : form;
+		    } else if (atom(form)) {
+		        if (/\[/.test(form)) {
+		            form = form.replace(/\]/g, '').replace(/\[/g, '.');
+		        };
 
-				    return cdr(assoc(car(cdr(form)), global));
-				} else if (eq(car(form), 'lambda')) {
-					return form;
-				} else if (eq(car(form), 'progn')) {
-				    return progn(form, scope);
-				} else {
-					return apply(car(form), evlis(cdr(form), scope), scope);
-				};
-			} else {
-				return apply(car(form), evlis(cdr(form), scope), scope);
-			};
+		        if (/\./.test(form)) {
+		            var methods = form.split('.'),
+                        label = methods.shift();
+
+		            return toPath(cdr(assoc(label, scope)), methods);
+		        } else {
+		            return cdr(assoc(form, scope));
+		        };
+		    } else if (atom(car(form))) {
+		        if (eq(car(form), 'quote')) {
+		            return quote(car(cdr(form)), scope);
+		        } else if (eq(car(form), 'cond')) {
+		            return evcon(cdr(form), scope);
+		        } else if (eq(car(form), '=')) {
+		            return assign(cdr(form), scope);
+		        } else if (eq(car(form), 'object')) {
+		            return object(cdr(form), scope);
+		        } else if (eq(car(form), 'lambda') || eq(car(form), 'macro')) {
+		            return form;
+		        } else if (eq(car(form), 'progn')) {
+		            return progn(evlis(cdr(form), scope), scope);
+		        } else if (eq(car(form), 'delete')) {
+		            var returnValue = eq(cdr(assoc(car(cdr(form), scope))), undefined) ? false : true;
+
+		            global = remove(car(cdr(form)), scope);
+
+		            return returnValue;
+		        } else if (Arithmetic.hasOwnProperty(car(form))) {
+		            return Arithmetic[car(form)](evlis(cdr(form), scope), scope);
+		        } else {
+		            if (eq(car(cdr(assoc(car(form), scope))), 'macro')) {
+		                return apply(car(form), cdr(form), scope);
+		            } else {
+		                return apply(car(form), evlis(cdr(form), scope), scope);
+		            };
+		        };
+		    } else {
+		        return apply(car(form), evlis(cdr(form), scope), scope);
+		    };
 		};
 
-		quote = function (x) {
-			return car(cdr(x));
+		quote = function (x, scope) {
+		    if (eq(car(x), 'unquote')) {
+		        return Eval(car(cdr(x)), scope);
+		    } else if (!atom(car(x))) {
+		        return cons(quote(car(x), scope), quote(cdr(x), scope));
+		    } else {
+		        return Null(cdr(x)) ? x : cons(car(x), quote(cdr(x), scope));
+		    };
 		};
 
 		evcon = function (cond, scope) {
-			if (Eval(car(car(cond)), scope)) {
-				return Eval(car(cdr(car(cond))), scope);
-			} else {
-				return evcon(cdr(cond), scope);
-			};
+		    return Eval(car(car(cond)), scope) ? Eval(car(cdr(car(cond))), scope) : evcon(cdr(cond), scope);
 		};
 
-		apply = function (fn, args, scope) {
-			if (atom(fn)) {
-				if (eq(fn, 'car')) {
-					return car(car(args));
-				} else if (eq(fn, 'cdr')) {
-					return cdr(car(args));
-				} else if (eq(fn, 'cons')) {
-					return cons(car(args), car(cdr(args)));
-				} else if (eq(fn, 'atom')) {
-					return atom(car(args));
-				} else if (eq(fn, 'eq')) {
-					return eq(car(args), car(cdr(args)));
-				} else if (eq(fn, 'var')) {
-					return Var(fn, scope);
-				} else {
-					return apply(Eval(fn, scope), args, scope);
-				};
-			} else if (eq(car(fn), 'lambda')) {
-			    var innerEval = Interpreter(pairlis(car(cdr(fn)), args, scope));
+		assign = function (form, scope) {
+		    if (cdr(assoc(car(form), scope)) === undefined) {
+		        global = cons(cons(car(form), Eval(car(cdr(form)), scope)), global);
 
-			    return innerEval(car(cdr(cdr(fn))));
-			} else if (eq(car(fn), 'var')) {
-				return apply(car(cdr(cdr(fn))), args, Var(fn, scope));
-			};
+		        return global[0][1];
+		    } else {
+		        global = subst(cons(car(form), Eval(car(cdr(form)), scope)), assoc(car(form), scope), scope);
+
+		        return cdr(assoc(car(form), global));
+		    };
 		};
 
-		evlis = function (form, scope) {
-			if (Null(form)) {
-				return false;
-			} else {
-				return cons(Eval(car(form), scope), evlis(cdr(form), scope));
-			};
-		};
+		object = function (form, scope, result) {
+		    result = result ? result : {};
+		    result[car(car(form))] = Eval(car(cdr(car(form))), scope);
 
-		Var = function (form, scope) {
-			global = cons(cons(car(cdr(form)), Eval(car(cdr(cdr(form))), scope)), global);
-
-			return global[0][1];
+		    return Null(cdr(form)) ? result : object(cdr(form), scope, result);
 		};
 
 		progn = function (form, scope) {
-		    if (eq(cdr(form), false)) {
-		        return Eval(car(form), scope);
-		    } else {
-		        Eval(car(form), scope);
+		    return Null(cdr(form)) ? car(form) : progn(cdr(form), scope);
+		};
 
-		        return progn(cdr(form), scope);
+		remove = function (label, scope) {
+		    return equal(car(car(scope)), label) ? cdr(scope) : cons(car(scope), remove(label, cdr(scope)));
+		};
+
+		apply = function (fn, args, scope) {
+		    if (atom(fn)) {
+		        if (eq(fn, 'car')) {
+		            return car(car(args));
+		        } else if (eq(fn, 'cdr')) {
+		            return cdr(car(args));
+		        } else if (eq(fn, 'cons')) {
+		            return cons(car(args), car(cdr(args)));
+		        } else if (eq(fn, 'atom')) {
+		            return atom(car(args));
+		        } else if (eq(fn, '==')) {
+		            return eq(car(args), car(cdr(args)));
+		        } else if (eq(fn, 'array')) {
+		            return array(args, scope);
+		        } else if (/\./.test(fn)) {
+		            return Eval(fn, scope)(car(args));
+		        } else {
+		            return apply(Eval(fn, scope), args, scope);
+		        };
+		    } else if (eq(car(fn), 'lambda')) {
+		        var innerEval = interpreter(pairlis(car(cdr(fn)), args, scope));
+
+		        return innerEval(car(cdr(cdr(fn))));
+		    } else if (eq(car(fn), 'macro')) {
+		        return Eval(Eval(sublis(pairlis(car(cdr(fn)), args, scope), car(cdr(cdr(fn)))), scope), scope);
+		    } else if (eq(car(fn), '=')) {
+		        return apply(car(cdr(cdr(fn))), args, assign(fn, scope));
 		    };
+		};
+
+		evlis = function (form, scope) {
+		    return Null(form) ? false : cons(Eval(car(form), scope), evlis(cdr(form), scope));
+		};
+
+		array = function (form, scope, result) {
+		    result = result ? result : [];
+		    result.push(car(form));
+
+		    return Null(cdr(form)) ? result : array(cdr(form), scope, result);
 		};
 
 		return function (sentence) {
@@ -518,7 +601,7 @@ Heroin = function (path) {
 				console.log('end');
 				break;
 			} else {
-				console.log(evaluator(sentence));
+				evaluator(sentence);
 			};
 		};
 	};
