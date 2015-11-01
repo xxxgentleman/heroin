@@ -41,12 +41,12 @@ It's just a LISP-like implentation based on node.js.
 
 >	If you want to use ++, please use macro like this:
 
-	=(++, macro((a, b), [=(a, +(a, 1))]));
+	=(++, macro((a), [=(a, +(a, 1))]));
 	++(x);
 
 >	So to create a standard module to set the basic and useful function and macro is a good way.
 >   No looping operators? I think it can be created by recursive of [condition -> then; true -> else], like this:
-	
+
 	=(while, macro((cond, exp), [(cond -> exp; true -> {exp, while(cond, exp)})]));
 
 ### compare with LISP for now
