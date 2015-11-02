@@ -355,7 +355,7 @@ parser = function (scanner) {
 
 (function () {
   var isArray = Array.isArray,
-    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, SUBR, interpreter;
+    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, SUBR;
 
   car = function (x) {
     if (isArray(x)) {
@@ -723,4 +723,3 @@ Heroin = function (path) {
 };
 
 module.exports = Heroin;
-﻿

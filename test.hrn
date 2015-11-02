@@ -1,2 +1,2 @@
-﻿var(tt, lambda((x, y), cons(car(x), y)));
+﻿=(tt, lambda((x, y), cons(car(x), y)));
 tt([A, B], [C, D]);
