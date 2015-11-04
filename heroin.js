@@ -558,7 +558,7 @@ parser = function (scanner) {
           return assign(cdr(form), scope);
         } else if (eq(car(form), 'object')) {
           return object(cdr(form), scope);
-        } else if (eq(car(form), 'lambda') || eq(car(form), 'macro')) {
+        } else if (eq(car(form), 'lambda') || eq(car(form), 'macro') || eq(car(form), 'λ')) {
           return form;
         } else if (eq(car(form), 'progn')) {
           return progn(evlis(cdr(form), scope), scope);
@@ -664,7 +664,7 @@ parser = function (scanner) {
         } else {
           return apply(Eval(fn, scope), args, scope);
         };
-      } else if (eq(car(fn), 'lambda')) {
+      } else if (eq(car(fn), 'lambda') || eq(car(fn), 'λ')) {
         var innerEval = interpreter(pairlis(car(cdr(fn)), args, scope));
 
         return innerEval(car(cdr(cdr(fn))));
