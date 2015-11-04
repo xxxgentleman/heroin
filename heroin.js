@@ -9,7 +9,7 @@ States = {
   COMMENT_STATE: 2,
   NUMBER_STATE: 3,
   IDENTIFIER_STATE: 4
-}
+};
 
 reader = function (string) {
 	var data = string,
@@ -22,9 +22,10 @@ reader = function (string) {
 				return '-1';
 			};
 
-			return data.charAt(currentPosition++);
-		},
+      currentPosition += 1;
 
+			return data[currentPosition - 1];
+		},
 		retract: function () {
 			currentPosition -= 1;
 
@@ -180,8 +181,6 @@ scanner = function (reader) {
               text: bufferString
             };
           };
-
-          break;
         default:
       };
     };
@@ -302,9 +301,8 @@ parser = function (scanner) {
               } else {
                 return currentText === ']' ? (list[1] === false ? ['quote', list] : ['quote', [list, false]]) : list;
               };
-            case '-1':
+            default: // case '-1'
               return null;
-            default:
           };
         default:
       };
@@ -355,7 +353,7 @@ parser = function (scanner) {
 
 (function () {
   var isArray = Array.isArray,
-    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, SUBR;
+    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, ARITHMETIC;
 
   car = function (x) {
     if (isArray(x)) {
@@ -480,7 +478,7 @@ parser = function (scanner) {
     return path;
   };
 
-  SUBR = function () {
+  ARITHMETIC = function () {
     var add, subtract, multiply, divide, modulo;
 
     add = function (form, scope) {
@@ -530,7 +528,7 @@ parser = function (scanner) {
 
   interpreter = function (metaScope) {
     var global = metaScope,
-      Arithmetic = SUBR(),
+      Arithmetic = ARITHMETIC(),
       Eval, quote, evcon, assign, object, progn, remove, apply, evlis, array;
 
     Eval = function (form, scope) {
@@ -703,20 +701,40 @@ parser = function (scanner) {
 }());
 
 Heroin = function (path) {
-  var data = readFileSync(path, 'utf8'),
+  var stdData = readFileSync('./std.hrn', 'utf8'),
+    data = readFileSync(path, 'utf8'),
+    stdSentence = parser(scanner(reader(stdData))),
     nextSentence = parser(scanner(reader(data))),
     evaluator = interpreter(global),
-    sentence;
+    State = {
+      STD_STATE: 0,
+      NORMAL_STATE: 1
+    };
 
   return function () {
-    while (true) {
-      sentence = nextSentence();
+    var state = State.STD_STATE,
+      sentence;
 
-      if (sentence === null) {
-        console.log('end');
-        break;
-      } else {
-        evaluator(sentence);
+    while (true) {
+      switch (state) {
+        case State.STD_STATE:
+          sentence = stdSentence();
+
+          if (sentence === null) {
+            state = State.NORMAL_STATE;
+          } else {
+            evaluator(sentence);
+          };
+
+          continue;
+        default:
+          sentence = nextSentence();
+
+          if (sentence === null) {
+            return 'end';
+          } else {
+            evaluator(sentence);
+          };
       };
     };
   };

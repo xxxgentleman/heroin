@@ -1,1 +1,8 @@
-﻿macro[+=; [symbol; value]; =[symbol; +[symbol; value]]]
+# Assignment
+﻿=(+=, macro((symbol, value), [=(symbol, +(symbol, value))]));
+=(-=, macro((symbol, value), [=(symbol, -(symbol, vlaue))]));
+=(*=, macro((symbol, value), [=(symbol, *(symbol, value))]));
+=(/=, macro((symbol, value), [=(symbol, /(symbol, value))]));
+=(%=, macro((symbol, value), [=(symbol, %(symbol, value))]));
+=(++, macro((symbol), [=(symbol, +(symbol, 1))]));
+=(--, macro((symbol), [=(symbol, -(symbol, 1))]));
