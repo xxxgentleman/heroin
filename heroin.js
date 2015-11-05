@@ -12,32 +12,32 @@ States = {
 };
 
 reader = function (string) {
-	var data = string,
-		currentPosition = 0,
-		dataLength = data.length;
+  var data = string,
+    currentPosition = 0,
+    dataLength = data.length;
 
-	return {
-		nextCharacter: function () {
-			if (currentPosition >= dataLength) {
-				return '-1';
-			};
+  return {
+    nextCharacter: function () {
+      if (currentPosition >= dataLength) {
+        return '-1';
+      };
 
       currentPosition += 1;
 
-			return data[currentPosition - 1];
-		},
-		retract: function () {
-			currentPosition -= 1;
+      return data[currentPosition - 1];
+    },
+    retract: function () {
+      currentPosition -= 1;
 
-			if (currentPosition >= dataLength) {
-				return;
-			};
+      if (currentPosition >= dataLength) {
+        return;
+      };
 
-			if (currentPosition < 0) {
-				currentPosition = 0;
-			};
-		}
-	};
+      if (currentPosition < 0) {
+        currentPosition = 0;
+      };
+    }
+  };
 };
 
 scanner = function (reader) {
