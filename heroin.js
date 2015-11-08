@@ -56,7 +56,7 @@ scanner = function (reader) {
           character = nextCharacter();
 
           switch (character) {
-            case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':// case '<': case '>':
+            case '-1': case ',': case ';': case '^': case '(': case ')': case '[': case ']': case '{': case '}':
               return {
                 type: 'separator',
                 text: character
