@@ -353,7 +353,7 @@ parser = function (scanner) {
 
 (function () {
   var isArray = Array.isArray,
-    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, ARITHMETIC;
+    car, cdr, cons, atom, eq, Null, equal, pairlis, subst, sublis, subtwo, assoc, primitive, toPath, ARITHMETIC, LOGIC;
 
   car = function (x) {
     if (isArray(x)) {
@@ -526,9 +526,27 @@ parser = function (scanner) {
     };
   };
 
+LOGIC = function () {
+  var less, lessEqual, greater, greaterEqual, and, or, not;
+
+  less = function (form, scope) {
+    return car(form) < car(cdr(form));
+  };
+
+  greater = function (form, scope) {
+    return car(form) > car(cdr(form));
+  };
+
+  return {
+    '<': less,
+    '>': greater
+  };
+};
+
   interpreter = function (metaScope) {
     var global = metaScope,
       Arithmetic = ARITHMETIC(),
+      Logic = LOGIC(),
       Eval, quote, evcon, assign, object, progn, remove, apply, evlis, array;
 
     Eval = function (form, scope) {
@@ -570,6 +588,8 @@ parser = function (scanner) {
           return returnValue;
         } else if (Arithmetic.hasOwnProperty(car(form))) {
           return Arithmetic[car(form)](evlis(cdr(form), scope), scope);
+        } else if (Logic.hasOwnProperty(car(form))) {
+          return Logic[car(form)](evlis(cdr(form), scope), scope);
         } else {
           if (eq(car(cdr(assoc(car(form), scope))), 'macro')) {
             return apply(car(form), cdr(form), scope);

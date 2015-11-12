@@ -33,7 +33,7 @@ It's just a LISP-like implentation based on node.js.
 	var a = b									=(a, b);
 	return a									return(a);
 	var c = function (a, b) { return a + b; }	=(c, lambda((a, b), +(a, b)));
-																						=(c, λ((a, b), +(a, b)));
+														=(c, λ((a, b), +(a, b)));
 
 >	If you want to use +=, please use macro like this:
 
@@ -59,7 +59,7 @@ It's just a LISP-like implentation based on node.js.
 	(CDR '(A B))					cdr([A, B]);
 	(EQ A B)						==(A, B);
 	(ATOM A)						atom(A);
-	(COND (P1 E1) (P2 E2))			(P1 -> E1; P2 -> E2);
+	(COND (P1 E1) (P2 E2))			(P1 -> E1; P2 -> E2;);
 
 ### special form
 

@@ -6,3 +6,13 @@
 =(%=, macro((symbol, value), [=(symbol, %(symbol, value))]));
 =(++, macro((symbol), [=(symbol, +(symbol, 1))]));
 =(--, macro((symbol), [=(symbol, -(symbol, 1))]));
+
+# Logic
+=(&, macro((conditionA, conditionB), [(conditionA -> (conditionB -> true; true -> false;); true -> false;)]));
+=(|, macro((conditionA, conditionB), [(conditionA -> true; true -> (conditionB -> true; true -> false;);)]));
+=(!, macro((condition), [(condition -> false; true -> true;)]));
+
+# Comparison
+=(!=, macro((symbolA, symbolB), [!(==(symbolA, symbolB))]));
+=(<=, macro((symbolA, symbolB), [!(>(symbolA, symbolB))]));
+=(>=, macro((symbolA, symbolB), [!(<(symbolA, symbolB))]));
