@@ -527,19 +527,14 @@ parser = function (scanner) {
   };
 
 LOGIC = function () {
-  var less, lessEqual, greater, greaterEqual, and, or, not;
+  var less;
 
   less = function (form, scope) {
     return car(form) < car(cdr(form));
   };
 
-  greater = function (form, scope) {
-    return car(form) > car(cdr(form));
-  };
-
   return {
-    '<': less,
-    '>': greater
+    '<': less
   };
 };
 

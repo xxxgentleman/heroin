@@ -1,3 +1,5 @@
-=(sd, 3);
-=(ds, 5);
-console.log(!=(sd, 0));
+# test std
+=(a, 0);
+=(b, -1);
+=(c, 1);
+console.log(?(<(a, 0), b, c));

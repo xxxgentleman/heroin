@@ -4,15 +4,23 @@
 =(*=, macro((symbol, value), [=(symbol, *(symbol, value))]));
 =(/=, macro((symbol, value), [=(symbol, /(symbol, value))]));
 =(%=, macro((symbol, value), [=(symbol, %(symbol, value))]));
-=(++, macro((symbol), [=(symbol, +(symbol, 1))]));
-=(--, macro((symbol), [=(symbol, -(symbol, 1))]));
+=(++, macro((symbol), [+=(symbol, 1)]));
+=(--, macro((symbol), [-=(symbol, 1)]));
 
 # Logic
-=(&, macro((conditionA, conditionB), [(conditionA -> (conditionB -> true; true -> false;); true -> false;)]));
-=(|, macro((conditionA, conditionB), [(conditionA -> true; true -> (conditionB -> true; true -> false;);)]));
-=(!, macro((condition), [(condition -> false; true -> true;)]));
+=(&, macro((condA, condB), [(condA -> (condB -> true; true -> false;); true -> false;)]));
+=(|, macro((condA, condB), [(condA -> true; true -> (condB -> true; true -> false;);)]));
+=(!, macro((cond), [(cond -> false; true -> true;)]));
 
 # Comparison
-=(!=, macro((symbolA, symbolB), [!(==(symbolA, symbolB))]));
-=(<=, macro((symbolA, symbolB), [!(>(symbolA, symbolB))]));
-=(>=, macro((symbolA, symbolB), [!(<(symbolA, symbolB))]));
+=(>, macro((smbA, smbB), [(<(smbA, smbB) -> false; true -> (==(smbA, smbB) -> false; true -> true;);)]));
+=(!=, macro((smbA, smbB), [!(==(smbA, smbB))]));
+=(<=, macro((smbA, smbB), [!(>(smbA, smbB))]));
+=(>=, macro((smbA, smbB), [!(<(smbA, smbB))]));
+
+# Conditionals
+#=(?, macro((cond, then, else), [(cond -> then; true -> else;)]));
+#=(switch, macro((cond, labelNExps), [(==(cond, car(labelNExp)) -> exp)]))
+
+# Looping
+#=(while, macro((cond, exp), [(cond -> {exp; while(cond, exp);}; true -> exp;)]));
