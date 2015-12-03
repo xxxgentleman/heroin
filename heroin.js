@@ -526,17 +526,17 @@ parser = function (scanner) {
     };
   };
 
-LOGIC = function () {
-  var less;
+  LOGIC = function () {
+    var less;
 
-  less = function (form, scope) {
-    return car(form) < car(cdr(form));
-  };
+    less = function (form, scope) {
+      return car(form) < car(cdr(form));
+    };
 
-  return {
-    '<': less
+    return {
+      '<': less
+    };
   };
-};
 
   interpreter = function (metaScope) {
     var global = metaScope,
@@ -574,7 +574,7 @@ LOGIC = function () {
         } else if (eq(car(form), 'lambda') || eq(car(form), 'macro') || eq(car(form), 'λ')) {
           return form;
         } else if (eq(car(form), 'progn')) {
-          return progn(evlis(cdr(form), scope), scope);
+          return progn(cdr(form), scope);
         } else if (eq(car(form), 'delete')) {
           var returnValue = eq(cdr(assoc(car(cdr(form), scope))), undefined) ? false : true;
 
@@ -645,10 +645,16 @@ LOGIC = function () {
     };
 
     progn = function (form, scope) {
+      global = scope;
+
       if (Null(cdr(form))) {
-        return car(form);
+        return Eval(car(form), global);
+      } else if (eq(car(car(form)), 'return')) {
+        return Eval(car(car(form)), global);
       } else {
-        return progn(cdr(form), scope);
+        Eval(car(form), global);
+
+        return progn(cdr(form), global);
       };
     };
 

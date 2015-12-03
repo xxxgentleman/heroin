@@ -4,8 +4,8 @@
 =(*=, macro((symbol, value), [=(symbol, *(symbol, value))]));
 =(/=, macro((symbol, value), [=(symbol, /(symbol, value))]));
 =(%=, macro((symbol, value), [=(symbol, %(symbol, value))]));
-=(++, macro((symbol), [+=(symbol, 1)]));
-=(--, macro((symbol), [-=(symbol, 1)]));
+=(++, macro((symbol), [=(symbol, +(symbol, 1))]));
+=(--, macro((symbol), [=(symbol, -(symbol, 1))]));
 
 # Logic
 =(&, macro((condA, condB), [(condA -> (condB -> true; true -> false;); true -> false;)]));
@@ -23,4 +23,4 @@
 #=(switch, macro((cond, labelNExps), [(==(cond, car(labelNExp)) -> exp)]))
 
 # Looping
-#=(while, macro((cond, exp), [(cond -> {exp; while(cond, exp);}; true -> exp;)]));
+=(while, macro((cond, exp), [(cond -> {exp; while(cond, exp);}; true -> true;)]));
