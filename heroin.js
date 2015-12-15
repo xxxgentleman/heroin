@@ -451,6 +451,7 @@ parser = function (scanner) {
     } else if (Null(cdr(scope))) {
       return [x, undefined];
     } else {
+      //console.log(x);
       return assoc(x, cdr(scope));
     };
   };
